@@ -24,3 +24,16 @@ tmp/
 **/*.sqlite3-shm
 **/*.docx
 **/*.pdf
+**/.env
+**/.env.*
+!**/.env.example
+**/data/
+**/output/
+**/backups/
+**/backup/
+**/tmp/
+**/*.db-journal
+**/*.sqlite-journal
+**/*.sqlite3-journal
+**/*.bak
+**/*.backup

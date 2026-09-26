@@ -15,6 +15,7 @@
     "sources:list": "tsx scripts/search-sources.ts list",
     "sources:record": "tsx scripts/search-sources.ts record",
     "seed": "tsx scripts/seed.ts",
+    "privacy:audit": "tsx scripts/privacy-audit.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "eslint . --max-warnings=0"
