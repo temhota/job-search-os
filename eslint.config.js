@@ -15,5 +15,9 @@ export default tseslint.config(
       "react-refresh/only-export-components": ["warn", { allowConstantExport: true }]
     }
   },
-  { languageOptions: { globals: { console: "readonly", process: "readonly", document: "readonly", fetch: "readonly" } } }
+  {
+    languageOptions: {
+      globals: { console: "readonly", process: "readonly", document: "readonly", fetch: "readonly" }
+    }
+  }
 );

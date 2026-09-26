@@ -12,7 +12,16 @@ interface Props {
   actionErrorText?: (reason: unknown) => string;
 }
 
-export function AsyncButton({ label, ariaLabel, onAction, onRefresh, refreshErrorHandled, className, disabled, actionErrorText }: Props) {
+export function AsyncButton({
+  label,
+  ariaLabel,
+  onAction,
+  onRefresh,
+  refreshErrorHandled,
+  className,
+  disabled,
+  actionErrorText
+}: Props) {
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<"action" | "refresh" | null>(null);
   const [saved, setSaved] = useState(false);
@@ -41,8 +50,27 @@ export function AsyncButton({ label, ariaLabel, onAction, onRefresh, refreshErro
     }
   }
 
-  return <span className="async-action">
-    <button type="button" className={className} aria-label={ariaLabel} disabled={busy || disabled || saved} onClick={() => run()}>{busy ? uiText.labels.saving : label}</button>
-    {failure && !(failure === "refresh" && refreshErrorHandled) && <span className="action-error" role="alert">{failure === "action" ? actionError ?? uiText.errors.saveChanges : uiText.errors.refreshAfterSave} <button type="button" onClick={() => run(failure === "refresh")} disabled={busy}>{failure === "action" ? uiText.labels.retry : uiText.labels.retryRefresh}</button></span>}
-  </span>;
+  return (
+    <span className="async-action">
+      <button
+        type="button"
+        className={className}
+        aria-label={ariaLabel}
+        disabled={busy || disabled || saved}
+        onClick={() => run()}
+      >
+        {busy ? uiText.labels.saving : label}
+      </button>
+      {failure && !(failure === "refresh" && refreshErrorHandled) && (
+        <span className="action-error" role="alert">
+          {failure === "action"
+            ? (actionError ?? uiText.errors.saveChanges)
+            : uiText.errors.refreshAfterSave}{" "}
+          <button type="button" onClick={() => run(failure === "refresh")} disabled={busy}>
+            {failure === "action" ? uiText.labels.retry : uiText.labels.retryRefresh}
+          </button>
+        </span>
+      )}
+    </span>
+  );
 }

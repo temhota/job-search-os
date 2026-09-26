@@ -8,7 +8,8 @@ import type { SearchSourceCheckInput } from "../src/shared/types.js";
 import { loadAppConfig } from "../src/server/config/load.js";
 import { toRuntimeDependencies } from "../src/server/config/runtime.js";
 
-const usage = "Usage: search-sources list | record SOURCE_ID STATUS DISCOVERED IMPORTED CHECKED_AT [ERROR]";
+const usage =
+  "Usage: search-sources list | record SOURCE_ID STATUS DISCOVERED IMPORTED CHECKED_AT [ERROR]";
 
 function parseWholeNumber(value: string, label: string, minimum: number): number {
   const parsed = Number(value);
@@ -18,21 +19,33 @@ function parseWholeNumber(value: string, label: string, minimum: number): number
   return parsed;
 }
 
-function parseCommand(args: string[]): { kind: "list" } | { kind: "record"; sourceId: number; input: SearchSourceCheckInput } {
+function parseCommand(
+  args: string[]
+): { kind: "list" } | { kind: "record"; sourceId: number; input: SearchSourceCheckInput } {
   if (args[0] === "list" && args.length === 1) return { kind: "list" };
   if (args[0] === "record" && (args.length === 6 || args.length === 7)) {
     const [id, status, discovered, imported, checkedAt, errorText] = args.slice(1);
     const sourceId = parseWholeNumber(id, "Source id", 1);
-    if (status !== "success" && status !== "error") throw new Error("Status must be success or error");
+    if (status !== "success" && status !== "error")
+      throw new Error("Status must be success or error");
     const discoveredCount = parseWholeNumber(discovered, "Discovered count", 0);
     const importedCount = parseWholeNumber(imported, "Imported count", 0);
-    if (importedCount > discoveredCount) throw new Error("Imported count must be between zero and discovered count");
-    if (!z.iso.datetime().safeParse(checkedAt).success) throw new Error("Checked time must be an ISO timestamp");
-    if (status === "error" && !errorText?.trim()) throw new Error("Error text is required for a failed check");
+    if (importedCount > discoveredCount)
+      throw new Error("Imported count must be between zero and discovered count");
+    if (!z.iso.datetime().safeParse(checkedAt).success)
+      throw new Error("Checked time must be an ISO timestamp");
+    if (status === "error" && !errorText?.trim())
+      throw new Error("Error text is required for a failed check");
     return {
       kind: "record",
       sourceId,
-      input: { status, discoveredCount, importedCount, checkedAt, errorText: status === "error" ? errorText : null }
+      input: {
+        status,
+        discoveredCount,
+        importedCount,
+        checkedAt,
+        errorText: status === "error" ? errorText : null
+      }
     };
   }
   throw new Error(usage);
@@ -50,7 +63,10 @@ export function runSearchSourcesCli(
     const { config, dataDir } = toRuntimeDependencies(loadAppConfig());
     if (!dbPath) mkdirSync(dataDir, { recursive: true });
     db = createDatabase(dbPath ?? resolve(dataDir, "jobs.db"));
-    migrate(db, { searchSources: config.search.sources, followUpSignature: config.candidate.signature });
+    migrate(db, {
+      searchSources: config.search.sources,
+      followUpSignature: config.candidate.signature
+    });
     const repo = new SearchSourceRepository(db);
     if (command.kind === "list") {
       write(JSON.stringify(repo.listEnabled(), null, 2));

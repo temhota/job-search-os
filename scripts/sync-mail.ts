@@ -10,9 +10,13 @@ import { toRuntimeDependencies } from "../src/server/config/runtime.js";
 const { config, dataDir, repositoryOptions } = toRuntimeDependencies(loadAppConfig());
 mkdirSync(dataDir, { recursive: true });
 const db = createDatabase(resolve(dataDir, "jobs.db"));
-migrate(db, { searchSources: config.search.sources, followUpSignature: config.candidate.signature });
+migrate(db, {
+  searchSources: config.search.sources,
+  followUpSignature: config.candidate.signature
+});
 const repo = new JobRepository(db, repositoryOptions);
-const since = process.argv[2] ?? repo.getSyncCursor("apple_mail")?.slice(0, 10) ?? config.mail.initialSyncDate;
+const since =
+  process.argv[2] ?? repo.getSyncCursor("apple_mail")?.slice(0, 10) ?? config.mail.initialSyncDate;
 
 try {
   const messages = await exportAppleMail(since, config.mail.accounts);

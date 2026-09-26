@@ -12,7 +12,10 @@ const { config, dataDir, repositoryOptions } = toRuntimeDependencies(loadAppConf
 if (!sourcePath) throw new Error("Usage: npm run import:mail-file -- path/to/export.dat");
 mkdirSync(dataDir, { recursive: true });
 const db = createDatabase(resolve(dataDir, "jobs.db"));
-migrate(db, { searchSources: config.search.sources, followUpSignature: config.candidate.signature });
+migrate(db, {
+  searchSources: config.search.sources,
+  followUpSignature: config.candidate.signature
+});
 try {
   const messages = parseAppleMailRows(readFileSync(resolve(sourcePath), "utf8"));
   const result = syncMailMessages(new JobRepository(db, repositoryOptions), messages);

@@ -1,6 +1,10 @@
 // Break caught: generic rejection language is turned into invented interview feedback.
 import { describe, expect, test } from "vitest";
-import { classifyEmail, isPlausibleCompany, isPlausibleRole } from "../src/server/mail/classifier.js";
+import {
+  classifyEmail,
+  isPlausibleCompany,
+  isPlausibleRole
+} from "../src/server/mail/classifier.js";
 
 describe("classifyEmail", () => {
   test("does not reserve the example profile name as an invalid company", () => {
@@ -22,7 +26,8 @@ describe("classifyEmail", () => {
     const result = classifyEmail({
       subject: "Technical interview with Example GmbH",
       sender: "recruiter@example.com",
-      content: "We would like to invite you to a technical interview for the Senior Frontend Engineer role."
+      content:
+        "We would like to invite you to a technical interview for the Senior Frontend Engineer role."
     });
     expect(result.stage).toBe("technical_interview");
     expect(result.needsReview).toBe(false);
@@ -53,25 +58,38 @@ describe("classifyEmail", () => {
     const result = classifyEmail({
       subject: "Alex, Ihre Bewerbung wurde an SAMPLE gesendet.",
       sender: "LinkedIn <jobs-noreply@linkedin.example.com>",
-      content: "Ihre Bewerbung wurde an SAMPLE gesendet. Frontend Developer (m/f/d) SAMPLE · Berlin (Vor Ort)"
+      content:
+        "Ihre Bewerbung wurde an SAMPLE gesendet. Frontend Developer (m/f/d) SAMPLE · Berlin (Vor Ort)"
     });
-    expect(result).toMatchObject({ stage: "applied", company: "SAMPLE", role: "Frontend Developer (m/f/d)", needsReview: false });
+    expect(result).toMatchObject({
+      stage: "applied",
+      company: "SAMPLE",
+      role: "Frontend Developer (m/f/d)",
+      needsReview: false
+    });
   });
 
   test("recognizes a Workable submission", () => {
     const result = classifyEmail({
       subject: "Thanks for applying to Orbit Learning",
       sender: "Workable <noreply@workable.example.com>",
-      content: "Your application for the Fullstack Engineer job was submitted successfully. Experience: Software Engineer at Demo Commerce."
+      content:
+        "Your application for the Fullstack Engineer job was submitted successfully. Experience: Software Engineer at Demo Commerce."
     });
-    expect(result).toMatchObject({ stage: "applied", company: "Orbit Learning", role: "Fullstack Engineer", needsReview: false });
+    expect(result).toMatchObject({
+      stage: "applied",
+      company: "Orbit Learning",
+      role: "Fullstack Engineer",
+      needsReview: false
+    });
   });
 
   test("records explicit lack of feedback as reason unknown", () => {
     const result = classifyEmail({
       subject: "AW: Your application | Example Recruitment",
       sender: "Taylor Recruiter <taylor@example.com>",
-      content: "Leider haben wir eine Absage bekommen - näheres Feedback habe ich noch nicht erhalten."
+      content:
+        "Leider haben wir eine Absage bekommen - näheres Feedback habe ich noch nicht erhalten."
     });
     expect(result.stage).toBe("rejected");
     expect(result.feedbackCategory).toBe("reason_unknown");
@@ -82,7 +100,8 @@ describe("classifyEmail", () => {
     const result = classifyEmail({
       subject: "Update on your application - Senior React Native Engineer",
       sender: "talent@acme.example.com",
-      content: "At Acme, we decided not to proceed. Feedback: We need stronger React Native architecture experience."
+      content:
+        "At Acme, we decided not to proceed. Feedback: We need stronger React Native architecture experience."
     });
     expect(result).toMatchObject({
       stage: "rejected",
@@ -105,9 +124,14 @@ describe("classifyEmail", () => {
     const result = classifyEmail({
       subject: "Your application for the Software Engineer (All Levels) position at Sample Systems",
       sender: "recruitment@example.com",
-      content: "We reviewed your application for the Software Engineer (All Levels) position at Sample Systems, but unfortunately decided not to proceed."
+      content:
+        "We reviewed your application for the Software Engineer (All Levels) position at Sample Systems, but unfortunately decided not to proceed."
     });
-    expect(result).toMatchObject({ company: "Sample Systems", role: "Software Engineer (All Levels)", stage: "rejected" });
+    expect(result).toMatchObject({
+      company: "Sample Systems",
+      role: "Software Engineer (All Levels)",
+      stage: "rejected"
+    });
   });
 
   test("rejects calendar titles and single technology names as role identities", () => {

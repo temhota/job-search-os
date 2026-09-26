@@ -36,13 +36,16 @@ function isApprovedDemoMedia(path: string, content: Buffer) {
 export function auditPaths(paths: string[]): AuditFinding[] {
   return paths.flatMap((path) => {
     const normalized = path.replaceAll("\\", "/");
-    const local = /(?:^|\/)(?:data|output|backups?|tmp)(?:\/|$)/i.test(normalized)
-      || /(?:^|\/)\.env(?:$|\.(?!example$))/i.test(normalized)
-      || /(?:^|\/)config\/local\.json$/i.test(normalized)
-      || /\.local\.json$/i.test(normalized)
-      || /\.(?:db|sqlite3?)(?:-(?:wal|shm|journal))?$/i.test(normalized)
-      || /\.(?:docx|pdf|bak|backup)$/i.test(normalized);
-    return local ? [{ code: "local-artifact", path, detail: "Local artifact must not be published." }] : [];
+    const local =
+      /(?:^|\/)(?:data|output|backups?|tmp)(?:\/|$)/i.test(normalized) ||
+      /(?:^|\/)\.env(?:$|\.(?!example$))/i.test(normalized) ||
+      /(?:^|\/)config\/local\.json$/i.test(normalized) ||
+      /\.local\.json$/i.test(normalized) ||
+      /\.(?:db|sqlite3?)(?:-(?:wal|shm|journal))?$/i.test(normalized) ||
+      /\.(?:docx|pdf|bak|backup)$/i.test(normalized);
+    return local
+      ? [{ code: "local-artifact", path, detail: "Local artifact must not be published." }]
+      : [];
   });
 }
 export function auditText(text: string, path: string, privateTerms: string[] = []): AuditFinding[] {
@@ -52,20 +55,38 @@ export function auditText(text: string, path: string, privateTerms: string[] = [
   if (/(?:\/Users\/[^/\s]+\/|\/home\/[^/\s]+\/|[A-Za-z]:\\+Users\\+[^\\\s]+\\+)/.test(text)) {
     add("absolute-user-path", "Absolute user directory found.");
   }
-  const emails = text.match(/[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@(?:[A-Za-z0-9-]+\.)+[A-Za-z]{2,}/g) ?? [];
-  if (emails.some((email) => {
-    const domain = email.split("@")[1].toLowerCase();
-    return domain !== "users.noreply.github.com" && !["example.com", "example.org", "example.net"]
-      .some((reserved) => domain === reserved || domain.endsWith(`.${reserved}`));
-  })) {
+  const emails =
+    text.match(/[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@(?:[A-Za-z0-9-]+\.)+[A-Za-z]{2,}/g) ?? [];
+  if (
+    emails.some((email) => {
+      const domain = email.split("@")[1].toLowerCase();
+      return (
+        domain !== "users.noreply.github.com" &&
+        !["example.com", "example.org", "example.net"].some(
+          (reserved) => domain === reserved || domain.endsWith(`.${reserved}`)
+        )
+      );
+    })
+  ) {
     add("non-example-email", "Email outside approved public domains found.");
   }
-  const assignments = text.matchAll(/(?:^|[^\w$])(?:["']([A-Za-z_$][\w$-]*)["']|([A-Za-z_$][\w$-]*))\s*[:=]\s*(?:"([^"\r\n]*)"|'([^'\r\n]*)'|([^\s"'`,;{}()[\]]+))/gm);
-  if ([...assignments].some((match) => {
-    const key = (match[1] ?? match[2]).replace(/([a-z0-9])([A-Z])/g, "$1_$2").replaceAll("-", "_").toLowerCase();
-    const value = match[3] ?? match[4] ?? match[5];
-    return /(?:^|_)(?:api_?key|access_?token|secret(?:_access)?_?key|client_?secret|password|passwd|secret)$/.test(key) && value.length >= 4;
-  })) {
+  const assignments = text.matchAll(
+    /(?:^|[^\w$])(?:["']([A-Za-z_$][\w$-]*)["']|([A-Za-z_$][\w$-]*))\s*[:=]\s*(?:"([^"\r\n]*)"|'([^'\r\n]*)'|([^\s"'`,;{}()[\]]+))/gm
+  );
+  if (
+    [...assignments].some((match) => {
+      const key = (match[1] ?? match[2])
+        .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
+        .replaceAll("-", "_")
+        .toLowerCase();
+      const value = match[3] ?? match[4] ?? match[5];
+      return (
+        /(?:^|_)(?:api_?key|access_?token|secret(?:_access)?_?key|client_?secret|password|passwd|secret)$/.test(
+          key
+        ) && value.length >= 4
+      );
+    })
+  ) {
     add("credential-assignment", "Possible credential assignment found.");
   }
   if (/\bauthorization["']?\s*[:=]\s*["']?(?:Bearer|Basic)\s+[A-Za-z0-9._~+/-]+=*/i.test(text)) {
@@ -85,29 +106,61 @@ export function auditText(text: string, path: string, privateTerms: string[] = [
 
 export function auditRepository(root: string, options: AuditOptions = {}): AuditFinding[] {
   const findings: AuditFinding[] = [];
-  const git = (...args: string[]) => execFileSync("git", ["-C", root, ...args], { stdio: ["ignore", "pipe", "pipe"], maxBuffer: 64 * 1024 * 1024 });
+  const git = (...args: string[]) =>
+    execFileSync("git", ["-C", root, ...args], {
+      stdio: ["ignore", "pipe", "pipe"],
+      maxBuffer: 64 * 1024 * 1024
+    });
   const text = (...args: string[]) => git(...args).toString("utf8");
   const splitPaths = (value: string) => value.split("\0").filter(Boolean);
   try {
     const terms = options.privateDenylistPath
-      ? readFileSync(options.privateDenylistPath, "utf8").split(/\r?\n/).map((line) => line.trim()).filter((line) => line && !line.startsWith("#"))
+      ? readFileSync(options.privateDenylistPath, "utf8")
+          .split(/\r?\n/)
+          .map((line) => line.trim())
+          .filter((line) => line && !line.startsWith("#"))
       : [];
     const scan = (path: string, content: Buffer, commit?: string) => {
       const location = safePath(path, terms);
-      findings.push(...auditPaths([path]).map((finding) => ({ ...finding, path: location, ...(commit ? { commit } : {}) })));
+      findings.push(
+        ...auditPaths([path]).map((finding) => ({
+          ...finding,
+          path: location,
+          ...(commit ? { commit } : {})
+        }))
+      );
       const decoded = content.toString("utf8");
       if (content.includes(0) || !Buffer.from(decoded).equals(content)) {
         if (!isApprovedDemoMedia(path, content)) {
-          findings.push({ code: "unexpected-binary", path: location, ...(commit ? { commit } : {}), detail: "Unexpected binary content found." });
+          findings.push({
+            code: "unexpected-binary",
+            path: location,
+            ...(commit ? { commit } : {}),
+            detail: "Unexpected binary content found."
+          });
         }
       }
-      findings.push(...auditText(decoded, path, terms).map((finding) => ({ ...finding, ...(commit ? { commit } : {}),
-        code: commit && finding.code === "private-identifier" ? "historical-private-identifier" : finding.code })));
+      findings.push(
+        ...auditText(decoded, path, terms).map((finding) => ({
+          ...finding,
+          ...(commit ? { commit } : {}),
+          code:
+            commit && finding.code === "private-identifier"
+              ? "historical-private-identifier"
+              : finding.code
+        }))
+      );
     };
     const paths = splitPaths(text("ls-files", "-z"));
     for (const path of paths) {
-      try { scan(path, readFileSync(join(root, path))); } catch {
-        findings.push({ code: "audit-error", path: safePath(path, terms), detail: "Tracked working file could not be read." });
+      try {
+        scan(path, readFileSync(join(root, path)));
+      } catch {
+        findings.push({
+          code: "audit-error",
+          path: safePath(path, terms),
+          detail: "Tracked working file could not be read."
+        });
       }
     }
     // Index blobs may differ from the working copy, including staged secrets.
@@ -119,9 +172,18 @@ export function auditRepository(root: string, options: AuditOptions = {}): Audit
     const commits = text("rev-list", "--all").trim().split("\n").filter(Boolean);
     for (const commit of commits) {
       const identities = text("show", "-s", "--format=%ae%n%ce", commit).trim().split("\n");
-      if (identities.some((email) => !/^[^@\s]+@users\.noreply\.github\.com$/i.test(email)
-        || (options.allowedAuthorEmail && email !== options.allowedAuthorEmail))) {
-        findings.push({ code: "commit-author-email", commit, detail: "Commit identity is not approved." });
+      if (
+        identities.some(
+          (email) =>
+            !/^[^@\s]+@users\.noreply\.github\.com$/i.test(email) ||
+            (options.allowedAuthorEmail && email !== options.allowedAuthorEmail)
+        )
+      ) {
+        findings.push({
+          code: "commit-author-email",
+          commit,
+          detail: "Commit identity is not approved."
+        });
       }
       for (const path of splitPaths(text("ls-tree", "-r", "--name-only", "-z", commit))) {
         scan(path, git("show", `${commit}:${path}`), commit);
@@ -134,9 +196,23 @@ export function auditRepository(root: string, options: AuditOptions = {}): Audit
       const type = text("cat-file", "-t", oid).trim();
       if (type === "tree") {
         for (const path of splitPaths(text("ls-tree", "-r", "-t", "--name-only", "-z", oid))) {
-          findings.push(...auditPaths([path]).map((finding) => ({ ...finding, path: safePath(path, terms), commit: oid })));
-          findings.push(...auditText(path, path, terms).map((finding) => ({ ...finding, commit: oid,
-            code: finding.code === "private-identifier" ? "historical-private-identifier" : finding.code })));
+          findings.push(
+            ...auditPaths([path]).map((finding) => ({
+              ...finding,
+              path: safePath(path, terms),
+              commit: oid
+            }))
+          );
+          findings.push(
+            ...auditText(path, path, terms).map((finding) => ({
+              ...finding,
+              commit: oid,
+              code:
+                finding.code === "private-identifier"
+                  ? "historical-private-identifier"
+                  : finding.code
+            }))
+          );
         }
         continue;
       }
@@ -147,16 +223,31 @@ export function auditRepository(root: string, options: AuditOptions = {}): Audit
         // Exempt only identity fields from private matching; tag names and
         // other headers as well as every message line still receive it.
         const separator = payload.indexOf("\n\n");
-        const headers = payload.slice(0, separator).split("\n")
-          .filter((line) => !/^(?:author|committer|tagger) /.test(line)).join("\n");
+        const headers = payload
+          .slice(0, separator)
+          .split("\n")
+          .filter((line) => !/^(?:author|committer|tagger) /.test(line))
+          .join("\n");
         const privatePayload = headers + payload.slice(separator);
-        const metadataFindings = [...auditText(payload, "[git metadata]"), ...auditText(privatePayload, "[git metadata]", terms)];
-        findings.push(...metadataFindings.map((finding) => ({ ...finding, commit: oid,
-          code: finding.code === "private-identifier" ? "historical-private-identifier" : finding.code })));
+        const metadataFindings = [
+          ...auditText(payload, "[git metadata]"),
+          ...auditText(privatePayload, "[git metadata]", terms)
+        ];
+        findings.push(
+          ...metadataFindings.map((finding) => ({
+            ...finding,
+            commit: oid,
+            code:
+              finding.code === "private-identifier" ? "historical-private-identifier" : finding.code
+          }))
+        );
       }
     }
   } catch {
-    findings.push({ code: "audit-error", detail: "Audit could not complete; repository or external inputs unavailable." });
+    findings.push({
+      code: "audit-error",
+      detail: "Audit could not complete; repository or external inputs unavailable."
+    });
   }
   return [...new Map(findings.map((finding) => [JSON.stringify(finding), finding])).values()];
 }

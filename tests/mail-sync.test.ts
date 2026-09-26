@@ -26,11 +26,16 @@ const base = {
 describe("syncMailMessages", () => {
   test("does not classify an attachment as a resume from a candidate surname alone", () => {
     const repo = setup();
-    syncMailMessages(repo, [{
-      ...base, messageId: "attachment@acme.example.com", receivedAt: "2026-08-01T09:00:00.000Z",
-      subject: "Thank you for your application - React Engineer",
-      content: "We received your application for React Engineer at Acme.", attachmentNames: "Morgan_Photo.pdf"
-    }]);
+    syncMailMessages(repo, [
+      {
+        ...base,
+        messageId: "attachment@acme.example.com",
+        receivedAt: "2026-08-01T09:00:00.000Z",
+        subject: "Thank you for your application - React Engineer",
+        content: "We received your application for React Engineer at Acme.",
+        attachmentNames: "Morgan_Photo.pdf"
+      }
+    ]);
     expect(repo.listApplications()[0].resume_version).toBeNull();
   });
   test("preserves registered discovery provenance when matching mail arrives", () => {
@@ -38,19 +43,34 @@ describe("syncMailMessages", () => {
     openDatabases.push(db);
     migrate(db, migrationOptions);
     const repo = new JobRepository(db, repositoryOptions);
-    const source = new SearchSourceRepository(db).create({ name: "Registered feed", searchUrl: "https://registered.example/jobs", category: "both" });
-    const job = repo.upsertJob({ company: "Acme", title: "Senior React Native Engineer", employmentType: "permanent", source: "Import", searchSourceId: source.id });
+    const source = new SearchSourceRepository(db).create({
+      name: "Registered feed",
+      searchUrl: "https://registered.example/jobs",
+      category: "both"
+    });
+    const job = repo.upsertJob({
+      company: "Acme",
+      title: "Senior React Native Engineer",
+      employmentType: "permanent",
+      source: "Import",
+      searchSourceId: source.id
+    });
 
-    const result = syncMailMessages(repo, [{
-      ...base,
-      messageId: "registered-ack@acme.example.com",
-      receivedAt: "2026-08-01T09:00:00.000Z",
-      subject: "Thank you for your application - Senior React Native Engineer",
-      content: "We received your application for Senior React Native Engineer at Acme."
-    }]);
+    const result = syncMailMessages(repo, [
+      {
+        ...base,
+        messageId: "registered-ack@acme.example.com",
+        receivedAt: "2026-08-01T09:00:00.000Z",
+        subject: "Thank you for your application - Senior React Native Engineer",
+        content: "We received your application for Senior React Native Engineer at Acme."
+      }
+    ]);
 
     expect(result).toEqual({ imported: 1, duplicates: 0, needsReview: 0 });
-    expect(repo.getJob(job.id)).toMatchObject({ search_source_id: source.id, source: "Registered feed" });
+    expect(repo.getJob(job.id)).toMatchObject({
+      search_source_id: source.id,
+      source: "Registered feed"
+    });
     expect(repo.listJobs()).toHaveLength(1);
     expect(repo.listApplications()).toHaveLength(1);
   });
@@ -79,10 +99,15 @@ describe("syncMailMessages", () => {
 
     expect(result).toEqual({ imported: 2, duplicates: 0, needsReview: 0 });
     expect(repo.listApplications()).toHaveLength(1);
-    expect(repo.listApplications()[0]).toMatchObject({ status: "rejected", applied_at: "2026-08-01T09:00:00.000Z" });
+    expect(repo.listApplications()[0]).toMatchObject({
+      status: "rejected",
+      applied_at: "2026-08-01T09:00:00.000Z"
+    });
     expect(repo.listEvidence()).toHaveLength(2);
     expect(repo.dashboard("2026-08-20T00:00:00.000Z").followUps).toEqual([]);
-    const followUps = db.prepare("SELECT status,draft FROM follow_ups ORDER BY sequence").all() as Array<{ status: string; draft: string }>;
+    const followUps = db
+      .prepare("SELECT status,draft FROM follow_ups ORDER BY sequence")
+      .all() as Array<{ status: string; draft: string }>;
     expect(followUps.every((row) => row.status === "dismissed")).toBe(true);
     expect(followUps[0].draft).toContain("Senior React Native Engineer at Acme");
   });
@@ -105,14 +130,16 @@ describe("syncMailMessages", () => {
 
   test("captures the visible resume filename without copying the attachment", () => {
     const repo = setup();
-    syncMailMessages(repo, [{
-      ...base,
-      messageId: "resume@acme.example.com",
-      receivedAt: "2026-08-01T09:00:00.000Z",
-      subject: "Thank you for your application - React Engineer",
-      content: "We received your application for React Engineer at Acme.",
-      attachmentNames: "Alex_Morgan_CV_React.pdf"
-    }]);
+    syncMailMessages(repo, [
+      {
+        ...base,
+        messageId: "resume@acme.example.com",
+        receivedAt: "2026-08-01T09:00:00.000Z",
+        subject: "Thank you for your application - React Engineer",
+        content: "We received your application for React Engineer at Acme.",
+        attachmentNames: "Alex_Morgan_CV_React.pdf"
+      }
+    ]);
     expect(repo.listApplications()[0]).toMatchObject({
       resume_version: "Alex_Morgan_CV_React.pdf",
       recruiter_contact: "jobs@acme.example.com"
@@ -121,13 +148,15 @@ describe("syncMailMessages", () => {
 
   test("stores an ambiguous recruiting email in the review queue without creating a job", () => {
     const repo = setup();
-    const result = syncMailMessages(repo, [{
-      ...base,
-      messageId: "chat@agency.example.com",
-      receivedAt: "2026-08-02T09:00:00.000Z",
-      subject: "Quick chat",
-      content: "Are you open to opportunities?"
-    }]);
+    const result = syncMailMessages(repo, [
+      {
+        ...base,
+        messageId: "chat@agency.example.com",
+        receivedAt: "2026-08-02T09:00:00.000Z",
+        subject: "Quick chat",
+        content: "Are you open to opportunities?"
+      }
+    ]);
 
     expect(result.needsReview).toBe(1);
     expect(repo.listJobs()).toHaveLength(0);
@@ -136,23 +165,30 @@ describe("syncMailMessages", () => {
 
   test("creates an interview timeline and records an unknown rejection reason without inventing feedback", () => {
     const repo = setup();
-    syncMailMessages(repo, [{
-      ...base,
-      messageId: "interview@acme.example.com",
-      receivedAt: "2026-08-05T09:00:00.000Z",
-      subject: "Technical interview - Senior React Native Engineer",
-      content: "Technical interview for Senior React Native Engineer at Acme."
-    }, {
-      ...base,
-      messageId: "rejected@acme.example.com",
-      receivedAt: "2026-08-08T09:00:00.000Z",
-      subject: "Update on your application - Senior React Native Engineer",
-      content: "At Acme, unfortunately we decided not to proceed."
-    }]);
+    syncMailMessages(repo, [
+      {
+        ...base,
+        messageId: "interview@acme.example.com",
+        receivedAt: "2026-08-05T09:00:00.000Z",
+        subject: "Technical interview - Senior React Native Engineer",
+        content: "Technical interview for Senior React Native Engineer at Acme."
+      },
+      {
+        ...base,
+        messageId: "rejected@acme.example.com",
+        receivedAt: "2026-08-08T09:00:00.000Z",
+        subject: "Update on your application - Senior React Native Engineer",
+        content: "At Acme, unfortunately we decided not to proceed."
+      }
+    ]);
 
     const dashboard = repo.dashboard("2026-08-09T00:00:00.000Z");
     expect(dashboard.interviews).toHaveLength(1);
-    expect(dashboard.interviews[0]).toMatchObject({ stage: "technical_interview", result: "rejected", explicit_feedback: null });
+    expect(dashboard.interviews[0]).toMatchObject({
+      stage: "technical_interview",
+      result: "rejected",
+      explicit_feedback: null
+    });
     expect(dashboard.insightDetails).toEqual([
       expect.objectContaining({ category: "reason_unknown", source_type: "system_inference" })
     ]);
@@ -160,22 +196,29 @@ describe("syncMailMessages", () => {
 
   test("attaches explicit employer feedback to the latest interview", () => {
     const repo = setup();
-    syncMailMessages(repo, [{
-      ...base,
-      messageId: "architecture-interview@acme.example.com",
-      receivedAt: "2026-08-05T09:00:00.000Z",
-      subject: "Technical interview - Senior React Native Engineer",
-      content: "Technical interview for Senior React Native Engineer at Acme."
-    }, {
-      ...base,
-      messageId: "architecture-feedback@acme.example.com",
-      receivedAt: "2026-08-08T09:00:00.000Z",
-      subject: "Update on your application - Senior React Native Engineer",
-      content: "At Acme, we decided not to proceed. Feedback: We need stronger React Native architecture experience."
-    }]);
+    syncMailMessages(repo, [
+      {
+        ...base,
+        messageId: "architecture-interview@acme.example.com",
+        receivedAt: "2026-08-05T09:00:00.000Z",
+        subject: "Technical interview - Senior React Native Engineer",
+        content: "Technical interview for Senior React Native Engineer at Acme."
+      },
+      {
+        ...base,
+        messageId: "architecture-feedback@acme.example.com",
+        receivedAt: "2026-08-08T09:00:00.000Z",
+        subject: "Update on your application - Senior React Native Engineer",
+        content:
+          "At Acme, we decided not to proceed. Feedback: We need stronger React Native architecture experience."
+      }
+    ]);
 
     const dashboard = repo.dashboard("2026-08-09T00:00:00.000Z");
-    expect(dashboard.interviews[0]).toMatchObject({ result: "rejected", explicit_feedback: "We need stronger React Native architecture experience." });
+    expect(dashboard.interviews[0]).toMatchObject({
+      result: "rejected",
+      explicit_feedback: "We need stronger React Native architecture experience."
+    });
     expect(dashboard.insightDetails).toEqual([
       expect.objectContaining({
         category: "react_native_mobile_architecture",
@@ -187,14 +230,16 @@ describe("syncMailMessages", () => {
 
   test("routes generic ATS status messages to review instead of inventing a job", () => {
     const repo = setup();
-    const result = syncMailMessages(repo, [{
-      ...base,
-      sender: "notifications@myworkday.example.com",
-      messageId: "generic-status@workday.example.com",
-      receivedAt: "2026-08-08T09:00:00.000Z",
-      subject: "Your application update - applying for the",
-      content: "At this time, unfortunately we decided not to proceed."
-    }]);
+    const result = syncMailMessages(repo, [
+      {
+        ...base,
+        sender: "notifications@myworkday.example.com",
+        messageId: "generic-status@workday.example.com",
+        receivedAt: "2026-08-08T09:00:00.000Z",
+        subject: "Your application update - applying for the",
+        content: "At this time, unfortunately we decided not to proceed."
+      }
+    ]);
     expect(result.needsReview).toBe(1);
     expect(repo.listJobs()).toHaveLength(0);
     expect(repo.listReviewQueue()).toHaveLength(1);

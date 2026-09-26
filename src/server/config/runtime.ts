@@ -10,13 +10,23 @@ export interface RuntimeDependencies {
   repositoryOptions: RepositoryOptions;
 }
 
-export function toRuntimeDependencies(config: AppConfig, root = process.cwd()): RuntimeDependencies {
+export function toRuntimeDependencies(
+  config: AppConfig,
+  root = process.cwd()
+): RuntimeDependencies {
   const mailPolicy: MailPolicy = {
     accounts: new Set(config.mail.accounts),
     senderAddresses: new Set(config.mail.senderAddresses.map((address) => address.toLowerCase()))
   };
   return {
-    config, dataDir: resolve(root, config.storage.dataDir), outputDir: resolve(root, config.storage.outputDir), mailPolicy,
-    repositoryOptions: { mail: mailPolicy, search: config.search, followUpSignature: config.candidate.signature }
+    config,
+    dataDir: resolve(root, config.storage.dataDir),
+    outputDir: resolve(root, config.storage.outputDir),
+    mailPolicy,
+    repositoryOptions: {
+      mail: mailPolicy,
+      search: config.search,
+      followUpSignature: config.candidate.signature
+    }
   };
 }
