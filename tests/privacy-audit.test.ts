@@ -7,6 +7,7 @@ import { auditPaths, auditRepository, auditText } from "../src/privacy/audit.js"
 
 const roots: string[] = [];
 const approved = "123+demo@users.noreply.github.com";
+const githubSystemEmail = ["noreply", "github.com"].join("@");
 const privateMarker = ["SYNTHETIC", "DENYLIST", "MARKER"].join("_");
 const personalEmail = ["person", "real-domain.test"].join("@");
 const credentialExamples = [
@@ -327,6 +328,92 @@ test("rejects non-noreply commit identities and enforces an explicit approved au
   expect(
     auditRepository(safe, { allowedAuthorEmail: "456+other@users.noreply.github.com" })
   ).toContainEqual(expect.objectContaining({ code: "commit-author-email" }));
+});
+test("accepts GitHub's system committer on a merge commit", () => {
+  const root = repository();
+  put(root, "README.md", "Public example");
+  commit(root);
+  const baseBranch = git(root, "branch", "--show-current");
+  git(root, "checkout", "-qb", "feature");
+  put(root, "feature.txt", "Feature content");
+  commit(root);
+  git(root, "checkout", "-q", baseBranch);
+  put(root, "main.txt", "Main content");
+  commit(root);
+  execFileSync(
+    "git",
+    ["-C", root, "merge", "--no-ff", "feature", "-m", "Merge pull request #1 from example/feature"],
+    {
+      env: {
+        ...process.env,
+        GIT_AUTHOR_NAME: "Example Contributor",
+        GIT_AUTHOR_EMAIL: approved,
+        GIT_COMMITTER_NAME: "GitHub",
+        GIT_COMMITTER_EMAIL: githubSystemEmail
+      },
+      stdio: ["ignore", "pipe", "pipe"]
+    }
+  );
+
+  expect(auditRepository(root, { allowedAuthorEmail: approved })).toEqual([]);
+});
+test("rejects a GitHub system committer when the merge subject has trailing text", () => {
+  const root = repository();
+  put(root, "README.md", "Public example");
+  commit(root);
+  const baseBranch = git(root, "branch", "--show-current");
+  git(root, "checkout", "-qb", "feature");
+  put(root, "feature.txt", "Feature content");
+  commit(root);
+  git(root, "checkout", "-q", baseBranch);
+  put(root, "main.txt", "Main content");
+  commit(root);
+  execFileSync(
+    "git",
+    [
+      "-C",
+      root,
+      "merge",
+      "--no-ff",
+      "feature",
+      "-m",
+      "Merge pull request #1 from example/feature with trailing text"
+    ],
+    {
+      env: {
+        ...process.env,
+        GIT_AUTHOR_NAME: "Example Contributor",
+        GIT_AUTHOR_EMAIL: approved,
+        GIT_COMMITTER_NAME: "GitHub",
+        GIT_COMMITTER_EMAIL: githubSystemEmail
+      },
+      stdio: ["ignore", "pipe", "pipe"]
+    }
+  );
+  const sha = git(root, "rev-parse", "HEAD");
+
+  expect(auditRepository(root, { allowedAuthorEmail: approved })).toContainEqual(
+    expect.objectContaining({ code: "commit-author-email", commit: sha })
+  );
+});
+test("rejects GitHub's system committer on an ordinary commit", () => {
+  const root = repository();
+  put(root, "README.md", "Public example");
+  execFileSync("git", ["-C", root, "commit", "-qm", "Ordinary commit"], {
+    env: {
+      ...process.env,
+      GIT_AUTHOR_NAME: "Example Contributor",
+      GIT_AUTHOR_EMAIL: approved,
+      GIT_COMMITTER_NAME: "GitHub",
+      GIT_COMMITTER_EMAIL: githubSystemEmail
+    },
+    stdio: ["ignore", "pipe", "pipe"]
+  });
+  const sha = git(root, "rev-parse", "HEAD");
+
+  expect(auditRepository(root, { allowedAuthorEmail: approved })).toContainEqual(
+    expect.objectContaining({ code: "commit-author-email", commit: sha })
+  );
 });
 test("checks index blobs, working files, binary data and historical artifact paths", () => {
   const root = repository();

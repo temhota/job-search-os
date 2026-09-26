@@ -67,7 +67,7 @@ Mail synchronization reads candidate messages in approved accounts and copies ev
 
 ## Public release safeguards
 
-The privacy audit checks tracked working files, staged blobs, all reachable commits and blobs, and annotated tag metadata. It rejects local artifacts, unexpected binary content, absolute user paths, non-example email domains, possible credentials/private keys, and commit identities outside GitHub noreply addresses. Allowed public email domains are `example.com`, `example.org`, `example.net` (including their subdomains), and `users.noreply.github.com`.
+The privacy audit checks tracked working files, staged blobs, all reachable commits and blobs, and annotated tag metadata. It rejects local artifacts, unexpected binary content, absolute user paths, non-example email domains, possible credentials/private keys, and commit identities outside GitHub noreply addresses. Allowed public email domains are `example.com`, `example.org`, `example.net` (including their subdomains), and `users.noreply.github.com`. The exact system address noreply@github.com is allowed only as the committer of GitHub-shaped pull-request merge commits.
 
 Set `PRIVATE_DENYLIST_PATH` in your shell to an external file containing one private identifier per line (blank lines and lines starting with `#` are ignored). Set `ALLOWED_AUTHOR_EMAIL` to enforce a single approved GitHub noreply identity. Run `npm run privacy:audit` with these optional environment variables for a personal release check. Keep both values and the denylist outside public files. Findings redact denylisted identifiers and never echo external option values. The generic CI audit runs on Node 24 with full Git history.
 

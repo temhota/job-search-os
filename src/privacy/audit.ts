@@ -21,6 +21,20 @@ function safePath(path: string, terms: string[]) {
   return containsPrivate(path, terms) ? "[redacted path]" : path;
 }
 
+const githubSystemEmail = "noreply@github.com";
+
+function isApprovedPublicEmail(email: string) {
+  const normalized = email.toLowerCase();
+  if (normalized === githubSystemEmail) return true;
+  const domain = normalized.split("@")[1];
+  return (
+    domain === "users.noreply.github.com" ||
+    ["example.com", "example.org", "example.net"].some(
+      (reserved) => domain === reserved || domain.endsWith(`.${reserved}`)
+    )
+  );
+}
+
 const approvedDemoMedia = new Map([
   ["docs/media/today.png", "cd9746bb1643268f3b01ada47140d594283d92f694eed38601f401ad37cb62c5"],
   ["docs/media/jobs.png", "69916bdc93f779041c206338087570e932449c69364f591ae80283fad1559cec"],
@@ -57,17 +71,7 @@ export function auditText(text: string, path: string, privateTerms: string[] = [
   }
   const emails =
     text.match(/[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@(?:[A-Za-z0-9-]+\.)+[A-Za-z]{2,}/g) ?? [];
-  if (
-    emails.some((email) => {
-      const domain = email.split("@")[1].toLowerCase();
-      return (
-        domain !== "users.noreply.github.com" &&
-        !["example.com", "example.org", "example.net"].some(
-          (reserved) => domain === reserved || domain.endsWith(`.${reserved}`)
-        )
-      );
-    })
-  ) {
+  if (emails.some((email) => !isApprovedPublicEmail(email))) {
     add("non-example-email", "Email outside approved public domains found.");
   }
   const assignments = text.matchAll(
@@ -171,13 +175,24 @@ export function auditRepository(root: string, options: AuditOptions = {}): Audit
     }
     const commits = text("rev-list", "--all").trim().split("\n").filter(Boolean);
     for (const commit of commits) {
-      const identities = text("show", "-s", "--format=%ae%n%ce", commit).trim().split("\n");
+      const [authorEmail, committerEmail, parents, subject] = text(
+        "show",
+        "-s",
+        "--format=%ae%n%ce%n%P%n%s",
+        commit
+      )
+        .trim()
+        .split("\n");
+      const approvedContributor = (email: string) =>
+        /^[^@\s]+@users\.noreply\.github\.com$/i.test(email) &&
+        (!options.allowedAuthorEmail || email === options.allowedAuthorEmail);
+      const githubMergeCommit =
+        committerEmail.toLowerCase() === githubSystemEmail &&
+        parents.trim().split(/\s+/).length > 1 &&
+        /^Merge pull request #\d+ from \S+$/.test(subject);
       if (
-        identities.some(
-          (email) =>
-            !/^[^@\s]+@users\.noreply\.github\.com$/i.test(email) ||
-            (options.allowedAuthorEmail && email !== options.allowedAuthorEmail)
-        )
+        !approvedContributor(authorEmail) ||
+        (!approvedContributor(committerEmail) && !githubMergeCommit)
       ) {
         findings.push({
           code: "commit-author-email",
