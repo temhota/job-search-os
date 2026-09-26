@@ -1,4 +1,5 @@
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -18,6 +19,19 @@ function containsPrivate(value: string, terms: string[]) {
 }
 function safePath(path: string, terms: string[]) {
   return containsPrivate(path, terms) ? "[redacted path]" : path;
+}
+
+const approvedDemoMedia = new Map([
+  ["docs/media/today.png", "cd9746bb1643268f3b01ada47140d594283d92f694eed38601f401ad37cb62c5"],
+  ["docs/media/jobs.png", "69916bdc93f779041c206338087570e932449c69364f591ae80283fad1559cec"],
+  ["docs/media/pipeline.png", "d33675c2971ea0a5d15fa7771983ccf442a75ad3e2f176e2d4c715b101e955a9"],
+  ["docs/media/review.png", "1e80b1736906d90db3ea7ac7a23933c4904c4f2b9d837bfab69ac9edae8031bb"]
+]);
+
+function isApprovedDemoMedia(path: string, content: Buffer) {
+  const normalized = path.replaceAll("\\", "/");
+  const expected = approvedDemoMedia.get(normalized);
+  return expected !== undefined && createHash("sha256").update(content).digest("hex") === expected;
 }
 export function auditPaths(paths: string[]): AuditFinding[] {
   return paths.flatMap((path) => {
@@ -83,7 +97,9 @@ export function auditRepository(root: string, options: AuditOptions = {}): Audit
       findings.push(...auditPaths([path]).map((finding) => ({ ...finding, path: location, ...(commit ? { commit } : {}) })));
       const decoded = content.toString("utf8");
       if (content.includes(0) || !Buffer.from(decoded).equals(content)) {
-        findings.push({ code: "unexpected-binary", path: location, ...(commit ? { commit } : {}), detail: "Unexpected binary content found." });
+        if (!isApprovedDemoMedia(path, content)) {
+          findings.push({ code: "unexpected-binary", path: location, ...(commit ? { commit } : {}), detail: "Unexpected binary content found." });
+        }
       }
       findings.push(...auditText(decoded, path, terms).map((finding) => ({ ...finding, ...(commit ? { commit } : {}),
         code: commit && finding.code === "private-identifier" ? "historical-private-identifier" : finding.code })));

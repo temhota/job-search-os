@@ -1,5 +1,5 @@
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { afterEach, expect, test } from "vitest";
@@ -240,6 +240,40 @@ test("checks index blobs, working files, binary data and historical artifact pat
   expect(findings).toContainEqual(expect.objectContaining({ code: "non-example-email", path: "staged.txt" }));
   expect(findings).toContainEqual(expect.objectContaining({ code: "non-example-email", path: "README.md" }));
   expect(findings).toContainEqual(expect.objectContaining({ code: "unexpected-binary", path: "binary.dat" }));
+});
+test("allows recognized screenshot media only inside docs/media", () => {
+  const root = repository();
+  put(root, "README.md", "Public example");
+  commit(root);
+  const media = resolve(import.meta.dirname, "..", "docs", "media");
+  const png = readFileSync(join(media, "today.png"));
+  put(root, "docs/media/today.png", png);
+  put(root, "docs/media/overview.mp4", Buffer.from([0, 0, 0, 24, 102, 116, 121, 112]));
+  put(root, "public/today.png", png);
+  put(root, "docs/media/extra.png", png);
+  put(root, "docs/media/broken.png", Buffer.from([0, 1, 255]));
+  const shapedButInvalidPng = Buffer.concat([
+    Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
+    Buffer.from([0, 0, 0, 13]), Buffer.from("IHDR"), Buffer.alloc(13), Buffer.alloc(4),
+    Buffer.from([0, 0, 0, 0]), Buffer.from("IEND"), Buffer.alloc(4)
+  ]);
+  put(root, "docs/media/pipeline.png", shapedButInvalidPng);
+  const sensitivePayload = Buffer.from([
+    "person", "@", "outside.invalid", " pass", "word", "=", "'", "synthetic", "-value", "'"
+  ].join(""));
+  put(root, "docs/media/jobs.png", Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), sensitivePayload]));
+  put(root, "docs/media/review.png", Buffer.concat([png, sensitivePayload]));
+
+  const findings = auditRepository(root);
+  expect(findings).not.toContainEqual(expect.objectContaining({ code: "unexpected-binary", path: "docs/media/today.png" }));
+  expect(findings).toContainEqual(expect.objectContaining({ code: "unexpected-binary", path: "docs/media/overview.mp4" }));
+  expect(findings).toContainEqual(expect.objectContaining({ code: "unexpected-binary", path: "public/today.png" }));
+  expect(findings).toContainEqual(expect.objectContaining({ code: "unexpected-binary", path: "docs/media/extra.png" }));
+  expect(findings).toContainEqual(expect.objectContaining({ code: "unexpected-binary", path: "docs/media/broken.png" }));
+  expect(findings).toContainEqual(expect.objectContaining({ code: "unexpected-binary", path: "docs/media/pipeline.png" }));
+  expect(findings).toContainEqual(expect.objectContaining({ code: "unexpected-binary", path: "docs/media/jobs.png" }));
+  expect(findings).toContainEqual(expect.objectContaining({ code: "non-example-email", path: "docs/media/review.png" }));
+  expect(findings).toContainEqual(expect.objectContaining({ code: "credential-assignment", path: "docs/media/review.png" }));
 });
 test("fails closed with redacted errors for unreadable denylist or invalid repository", () => {
   expect(auditRepository(temporaryRoot())).toContainEqual(expect.objectContaining({ code: "audit-error" }));

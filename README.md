@@ -2,6 +2,16 @@
 
 A local job-search dashboard for reviewing leads, tracking applications, preparing resumes, and opening follow-up drafts. It stores application records and imported email evidence in local SQLite storage. You review documents and send messages yourself.
 
+## Demo
+
+Every company, vacancy, contact, and application shown below is fictitious.
+
+| Prioritize today's work | Review and triage jobs |
+| --- | --- |
+| ![Today shortlist with ranked vacancies and application actions](docs/media/today.png) | ![Job inbox with source, role, work-mode, and score filters](docs/media/jobs.png) |
+| **Track the active pipeline** | **Resolve uncertain email evidence** |
+| ![Application pipeline with stage controls and a scheduled follow-up](docs/media/pipeline.png) | ![Manual review queue containing two fictitious email records](docs/media/review.png) |
+
 ## Privacy and prerequisites
 
 The included candidate Alex Morgan, vacancies, and contacts are fictitious. Use fictitious data only in screenshots, demos, fixtures, and public discussions. Mail imports, personal configuration, databases, backups, and generated documents belong to the person running the app and must stay outside Git.
