@@ -1,15 +1,16 @@
 import type { ReactNode } from "react";
-import type { PageKey } from "../types.js";
+import type { DashboardData, PageKey } from "../types.js";
 import { uiText } from "../ui-text.js";
 
 interface AppShellProps {
   activePage: PageKey;
   reviewCount: number;
+  searchSelection: DashboardData["searchSelection"];
   onNavigate: (page: PageKey) => void;
   children: ReactNode;
 }
 
-export function AppShell({ activePage, reviewCount, onNavigate, children }: AppShellProps) {
+export function AppShell({ activePage, reviewCount, searchSelection, onNavigate, children }: AppShellProps) {
   return <div className="shell">
     <aside className="sidebar">
       <div className="brand"><span>JS</span><div>{uiText.labels.brand}<small>{uiText.labels.operatingSystem}</small></div></div>
@@ -19,7 +20,7 @@ export function AppShell({ activePage, reviewCount, onNavigate, children }: AppS
           {key === "review" && reviewCount > 0 && <b aria-label={`${reviewCount} items needing review`}>{reviewCount}</b>}
         </button>)}
       </nav>
-      <div className="goal-card" aria-label="Search overview"><small>{uiText.labels.search}</small><strong>{uiText.labels.localSearch}</strong><span>{uiText.labels.planApplication}</span></div>
+      <div className="goal-card" aria-label="Search overview"><small>{uiText.labels.search}</small><strong>{searchSelection.total} {uiText.labels.dailyApplications}</strong><span>{searchSelection.permanent} {uiText.labels.permanentSelection} · {searchSelection.freelance} {uiText.labels.freelanceSelection}</span></div>
     </aside>
     <main className="content">
       <header className="topbar"><div><p>{new Intl.DateTimeFormat("en-GB", { dateStyle: "long" }).format(new Date())}</p><h1>{uiText.nav.find(({ key }) => key === activePage)?.label}</h1></div><div className="sync"><span />{uiText.labels.appleMail}</div></header>

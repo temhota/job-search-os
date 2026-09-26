@@ -11,9 +11,9 @@ export function parseSingleSenderAddress(sender: string) {
   return normaliseSenderAddress(candidate);
 }
 
-export function isReplyableSender(sender: string) {
+export function isReplyableSender(sender: string, selfAddresses: ReadonlySet<string>) {
   const address = parseSingleSenderAddress(sender);
-  if (!address || ["candidate@example.com", "former@example.com"].includes(address)) return false;
+  if (!address || [...selfAddresses].some((self) => normaliseSenderAddress(self) === address)) return false;
   const [localPart, domain] = address.split("@");
   const compactLocalPart = localPart.split("+")[0].replace(/[._-]/g, "");
   const automatedLocalPart = /^(?:noreply|donotreply)/i.test(compactLocalPart)

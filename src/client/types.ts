@@ -3,6 +3,7 @@ import type { TodayView, PipelineView, SearchSource } from "../shared/types.js";
 export type Row = Record<string, unknown> & { id: number };
 
 export interface DashboardData {
+  searchSelection: { permanent: number; freelance: number; total: number };
   summary: { jobs: number; applications: number; interviews: number; responses: number; offers: number; review: number };
   jobs: Row[];
   applications: Row[];

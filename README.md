@@ -2,12 +2,13 @@
 
 A local job-search dashboard for reviewing leads, tracking applications, preparing resumes and opening follow-up drafts. Data stays in local SQLite storage. Email automation never sends messages; users review and send drafts themselves.
 
-This baseline uses the fictitious candidate Alex Morgan and invented demo vacancies. All candidate and Mail defaults are examples.
+The example configuration uses the fictitious candidate Alex Morgan and invented demo vacancies. Copy it to the ignored local configuration and edit the profile, Mail accounts, search policy, sources and storage paths before using your own data. `JOB_SEARCH_CONFIG` can select another configuration file.
 
 Requires Node.js 24. Apple Mail integration requires macOS and automation permission. Resume generation requires Python with `python-docx` and LibreOffice; `DOCUMENT_PYTHON` and `DOCUMENT_SOFFICE` can select their executables.
 
 ```sh
 npm ci
+cp config/example.json config/local.json
 npm run seed
 npm run dev
 npm test

@@ -1,3 +1,4 @@
+import { migrationOptions, repositoryOptions } from "./config-fixture.js";
 // Break caught: a repeated import creates duplicate jobs/applications instead of updating evidence.
 import { afterEach, describe, expect, test } from "vitest";
 import { createDatabase, migrate } from "../src/server/db/database.js";
@@ -12,11 +13,37 @@ afterEach(() => {
 function setup() {
   const db = createDatabase(":memory:");
   databases.push(db);
-  migrate(db);
-  return new JobRepository(db);
+  migrate(db, migrationOptions);
+  return new JobRepository(db, repositoryOptions);
 }
 
 describe("JobRepository", () => {
+  test("persists sponsorship requirements across partial imports and applies the current exclusion policy to Today", () => {
+    const db = createDatabase(":memory:");
+    databases.push(db);
+    migrate(db, migrationOptions);
+    const repo = new JobRepository(db, repositoryOptions);
+    const input = { company: "Example Sponsor", title: "Engineer", employmentType: "permanent" as const, source: "web" };
+    const job = repo.upsertJob({ ...input, requiresSponsorship: true });
+    repo.upsertJob({ ...input, description: "Updated description" });
+    const reopened = new JobRepository(db, repositoryOptions);
+    expect(reopened.getJob(job.id).requires_sponsorship).toBe(1);
+    expect(reopened.dashboard().today.applyToday).toEqual([]);
+    expect(reopened.dashboard().jobs).toHaveLength(1);
+    const allowed = new JobRepository(db, { ...repositoryOptions, search: { ...repositoryOptions.search, excludeSponsorshipRequired: false } });
+    expect(allowed.dashboard().today.applyToday.map((item) => item.id)).toEqual([job.id]);
+  });
+
+  test("updates Today eligibility when an import changes the sponsorship requirement", () => {
+    const repo = setup();
+    const input = { company: "Example Requirement", title: "Engineer", employmentType: "permanent" as const, source: "web" };
+    const job = repo.upsertJob(input);
+    repo.upsertJob({ ...input, requiresSponsorship: true });
+    expect(repo.dashboard().today.applyToday).toEqual([]);
+    repo.upsertJob({ ...input, requiresSponsorship: false });
+    expect(repo.dashboard().today.applyToday.map((item) => item.id)).toEqual([job.id]);
+  });
+
   test("orders review evidence by likely action and suggests only reliable application matches", () => {
     const repo = setup();
     const acme = repo.upsertJob({ company: "Acme", title: "Engineer", employmentType: "permanent", source: "web" });
@@ -66,8 +93,8 @@ describe("JobRepository", () => {
   test("keeps stage age stable when notes and priority change", () => {
     const db = createDatabase(":memory:");
     databases.push(db);
-    migrate(db);
-    const repo = new JobRepository(db);
+    migrate(db, migrationOptions);
+    const repo = new JobRepository(db, repositoryOptions);
     const job = repo.upsertJob({ company: "StageCo", title: "Engineer", employmentType: "permanent", source: "web" });
     const id = repo.upsertApplication(job.id, "applied", "2026-09-10T09:00:00.000Z");
     expect((repo.dashboard("2026-09-24T12:00:00.000Z").pipeline.active.find((row) => row.id === id))?.days_in_stage).toBe(14);
@@ -78,8 +105,8 @@ describe("JobRepository", () => {
   test("records a late-arriving earlier status without rewinding the current stage", () => {
     const db = createDatabase(":memory:");
     databases.push(db);
-    migrate(db);
-    const repo = new JobRepository(db);
+    migrate(db, migrationOptions);
+    const repo = new JobRepository(db, repositoryOptions);
     const job = repo.upsertJob({ company: "Late Mail", title: "Engineer", employmentType: "permanent", source: "web" });
     const id = repo.upsertApplication(job.id, "applied", "2026-09-18T09:00:00.000Z");
     repo.upsertApplication(job.id, "rejected", "2026-09-23T09:00:00.000Z");
@@ -93,8 +120,8 @@ describe("JobRepository", () => {
   test("keeps a newer recruiter screen current when older technical evidence arrives late", () => {
     const db = createDatabase(":memory:");
     databases.push(db);
-    migrate(db);
-    const repo = new JobRepository(db);
+    migrate(db, migrationOptions);
+    const repo = new JobRepository(db, repositoryOptions);
     const job = repo.upsertJob({ company: "Chronology", title: "Engineer", employmentType: "permanent", source: "web" });
     const id = repo.upsertApplication(job.id, "applied", "2026-09-01T09:00:00.000Z");
     repo.upsertApplication(job.id, "recruiter_screen", "2026-09-23T09:00:00.000Z");
@@ -109,8 +136,8 @@ describe("JobRepository", () => {
   test("completes, dismisses, and snoozes follow-ups with one activity each", () => {
     const db = createDatabase(":memory:");
     databases.push(db);
-    migrate(db);
-    const repo = new JobRepository(db);
+    migrate(db, migrationOptions);
+    const repo = new JobRepository(db, repositoryOptions);
     const job = repo.upsertJob({ company: "FollowCo", title: "Engineer", employmentType: "permanent", source: "web" });
     const applicationId = repo.upsertApplication(job.id, "applied", "2026-09-01T09:00:00.000Z");
     db.prepare("INSERT INTO follow_ups (application_id,sequence,due_at,draft) VALUES (?,?,?,?)")
@@ -137,8 +164,8 @@ describe("JobRepository", () => {
   test("selects the latest replyable inbound email for a follow-up draft", () => {
     const db = createDatabase(":memory:");
     databases.push(db);
-    migrate(db);
-    const repo = new JobRepository(db);
+    migrate(db, migrationOptions);
+    const repo = new JobRepository(db, repositoryOptions);
     const job = repo.upsertJob({ company: "FollowCo", title: "Engineer", employmentType: "permanent", source: "web" });
     repo.upsertApplication(job.id, "applied", "2026-09-01T09:00:00.000Z");
     const evidence = (messageId: string, receivedAt: string, sender: string, options: { mailbox?: string; account?: string; needsReview?: boolean } = {}) => repo.recordEmailEvidence(job.id, {
@@ -178,8 +205,8 @@ describe("JobRepository", () => {
   test.each(["rejected", "withdrawn"] as const)("manual %s dismisses only pending follow-ups", (status) => {
     const db = createDatabase(":memory:");
     databases.push(db);
-    migrate(db);
-    const repo = new JobRepository(db);
+    migrate(db, migrationOptions);
+    const repo = new JobRepository(db, repositoryOptions);
     const job = repo.upsertJob({ company: "Terminal Co", title: "Engineer", employmentType: "permanent", source: "web" });
     const applicationId = repo.upsertApplication(job.id, "applied", "2026-09-01T09:00:00.000Z");
     db.prepare("UPDATE follow_ups SET status='done' WHERE application_id=? AND sequence=1").run(applicationId);
@@ -195,8 +222,8 @@ describe("JobRepository", () => {
   test("imported rejection dismisses pending follow-ups while an active stage preserves them", () => {
     const db = createDatabase(":memory:");
     databases.push(db);
-    migrate(db);
-    const repo = new JobRepository(db);
+    migrate(db, migrationOptions);
+    const repo = new JobRepository(db, repositoryOptions);
     const job = repo.upsertJob({ company: "Imported Terminal", title: "Engineer", employmentType: "permanent", source: "web" });
     const applicationId = repo.upsertApplication(job.id, "applied", "2026-09-01T09:00:00.000Z");
 
@@ -212,14 +239,14 @@ describe("JobRepository", () => {
   test("migration backfills stale terminal follow-ups once", () => {
     const db = createDatabase(":memory:");
     databases.push(db);
-    migrate(db);
-    const repo = new JobRepository(db);
+    migrate(db, migrationOptions);
+    const repo = new JobRepository(db, repositoryOptions);
     const job = repo.upsertJob({ company: "Legacy Terminal", title: "Engineer", employmentType: "permanent", source: "web" });
     const applicationId = repo.upsertApplication(job.id, "applied", "2026-09-01T09:00:00.000Z");
     db.prepare("UPDATE applications SET status='rejected' WHERE id=?").run(applicationId);
 
-    migrate(db);
-    migrate(db);
+    migrate(db, migrationOptions);
+    migrate(db, migrationOptions);
 
     expect(db.prepare("SELECT status FROM follow_ups WHERE application_id=? ORDER BY sequence").all(applicationId))
       .toEqual([{ status: "dismissed" }, { status: "dismissed" }]);
@@ -230,8 +257,8 @@ describe("JobRepository", () => {
   test("marks a job applied once and leaves existing applications untouched", () => {
     const db = createDatabase(":memory:");
     databases.push(db);
-    migrate(db);
-    const repo = new JobRepository(db);
+    migrate(db, migrationOptions);
+    const repo = new JobRepository(db, repositoryOptions);
     const job = repo.upsertJob({ company: "ApplyCo", title: "Engineer", employmentType: "permanent", source: "web" });
     repo.updateJobTriage(job.id, "skipped");
 
@@ -311,10 +338,10 @@ describe("JobRepository", () => {
                (103,'old-offer','Example Mail','INBOX','2026-09-20T09:00:00.000Z','recruiter@example.com','Alex Morgan','Offer','Offer','offer',0.95);
     `);
 
-    migrate(db);
-    migrate(db);
+    migrate(db, migrationOptions);
+    migrate(db, migrationOptions);
 
-    const repo = new JobRepository(db);
+    const repo = new JobRepository(db, repositoryOptions);
     expect(repo.listJobs().find((job) => job.id === 101)).toMatchObject({ id: 101, triage_status: "new", application_id: null });
     expect(repo.listJobs().find((job) => job.id === 102)).toMatchObject({ id: 102, triage_status: "new", application_status: "applied" });
     expect(db.prepare("SELECT stage_entered_at FROM applications WHERE job_id=102").get()).toMatchObject({ stage_entered_at: expect.any(String) });
@@ -326,8 +353,8 @@ describe("JobRepository", () => {
   test("persists manual triage changes and records their previous state", () => {
     const db = createDatabase(":memory:");
     databases.push(db);
-    migrate(db);
-    const repo = new JobRepository(db);
+    migrate(db, migrationOptions);
+    const repo = new JobRepository(db, repositoryOptions);
     const job = repo.upsertJob({ company: "Acme", title: "Engineer", employmentType: "permanent", source: "web" });
 
     expect(repo.listJobs().find((item) => item.id === job.id)).toMatchObject({ triage_status: "new" });

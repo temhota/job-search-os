@@ -1,3 +1,4 @@
+import { migrationOptions, repositoryOptions, testConfig } from "./config-fixture.js";
 // Break caught: dashboard edits are not persisted or unsafe application fields are accepted.
 import { afterEach, describe, expect, test } from "vitest";
 import request from "supertest";
@@ -17,11 +18,11 @@ afterEach(() => databases.splice(0).forEach((db) => db.close()));
 function setup() {
   const db = createDatabase(":memory:");
   databases.push(db);
-  migrate(db);
-  const repo = new JobRepository(db);
+  migrate(db, migrationOptions);
+  const repo = new JobRepository(db, repositoryOptions);
   const job = repo.upsertJob({ company: "Acme", title: "Senior React Engineer", location: "Berlin", employmentType: "permanent", source: "web" });
   const applicationId = repo.upsertApplication(job.id, "applied", "2026-09-01T09:00:00.000Z");
-  return { app: createApp(db), repo, applicationId, db };
+  return { app: createApp(db, { repositoryOptions }), repo, applicationId, db };
 }
 
 function addReviewEvidence(repo: JobRepository, suffix: string) {
@@ -41,12 +42,23 @@ function addReviewEvidence(repo: JobRepository, suffix: string) {
 }
 
 describe("search source API", () => {
+  test("exposes configured selection counts and excludes sponsorship-required jobs from the dashboard shortlist", async () => {
+    const { db } = setup();
+    const options = { ...repositoryOptions, search: { ...repositoryOptions.search, dailySelection: { permanent: 1, freelance: 2, total: 3 } } };
+    const repo = new JobRepository(db, options);
+    const excluded = repo.upsertJob({ company: "Example Sponsor", title: "Engineer", employmentType: "permanent", source: "web", requiresSponsorship: true });
+    const response = await request(createApp(db, { repositoryOptions: options })).get("/api/dashboard").expect(200);
+    expect(response.body.searchSelection).toEqual({ permanent: 1, freelance: 2, total: 3 });
+    expect(response.body.today.applyToday.map((job: { id: number }) => job.id)).not.toContain(excluded.id);
+    expect(response.body.jobs.map((job: { id: number }) => job.id)).toContain(excluded.id);
+  });
+
   const sourceInput = { name: "React Native EU", searchUrl: "https://jobs.example.com/search?q=react-native&region=eu", category: "both", enabled: true };
 
   test("lists seeded sources, creates and disables a custom source, and includes the same rows in dashboard", async () => {
     const { app } = setup();
     const initial = await request(app).get("/api/search-sources").expect(200);
-    expect(initial.body).toHaveLength(14);
+    expect(initial.body).toHaveLength(1);
     const created = await request(app).post("/api/search-sources").send(sourceInput).expect(201);
     expect(created.body).toMatchObject({ name: sourceInput.name, search_url: sourceInput.searchUrl, enabled: 1 });
     await request(app).patch(`/api/search-sources/${created.body.id}`).send({ enabled: false }).expect(200);
@@ -105,7 +117,7 @@ describe("search source API", () => {
     await request(app).post("/api/search-sources").set("Origin", foreign).send({ ...sourceInput, searchUrl: "https://other.example/jobs" }).expect(403);
     await request(app).patch(`/api/search-sources/${source.id}`).set("Origin", foreign).send({ enabled: false }).expect(403);
     await request(app).post(`/api/search-sources/${source.id}/checks`).set("Origin", foreign).send({ status: "success", discoveredCount: 1, importedCount: 1, checkedAt: "2026-09-25T07:00:00.000Z" }).expect(403);
-    expect(db.prepare("SELECT COUNT(*) count FROM search_sources").get()).toMatchObject({ count: 15 });
+    expect(db.prepare("SELECT COUNT(*) count FROM search_sources").get()).toMatchObject({ count: 2 });
     expect(db.prepare("SELECT COUNT(*) count FROM search_source_checks").get()).toMatchObject({ count: 0 });
     expect(new SearchSourceRepository(db).list().find((row) => row.id === source.id)?.enabled).toBe(1);
   });
@@ -126,7 +138,7 @@ describe("dashboard API", () => {
     let generated = 0;
     let openedDrafts = 0;
     const followUpId = Number((db.prepare("SELECT id FROM follow_ups WHERE application_id=? ORDER BY sequence LIMIT 1").get(applicationId) as { id: number }).id);
-    const app = createApp(db, {
+    const app = createApp(db, { repositoryOptions,
       documentGenerator: { generate: async () => { generated++; throw new Error("must not generate"); } },
       emailDraftOpener: async () => { openedDrafts++; }
     });
@@ -156,8 +168,8 @@ describe("dashboard API", () => {
       const beforeApplications = repo.listApplications().length;
       const generator = createDocumentGenerator(repo, root, async (_command, args) => {
         if (missing === "pdf" && args.some((arg) => arg.endsWith("generate-resume.py"))) writeFileSync(args[2], "partial-docx");
-      });
-      await request(createApp(db, { documentGenerator: generator })).post(`/api/jobs/${job.id}/documents`).send({ language: "English" }).expect(500);
+      }, testConfig.candidate);
+      await request(createApp(db, { repositoryOptions, documentGenerator: generator })).post(`/api/jobs/${job.id}/documents`).send({ language: "English" }).expect(500);
       expect(db.prepare("SELECT COUNT(*) AS count FROM documents WHERE job_id=?").get(job.id)).toMatchObject({ count: 0 });
       expect(db.prepare("SELECT COUNT(*) AS count FROM activity WHERE entity_type='job' AND entity_id=? AND action='documents_generated'").get(job.id)).toMatchObject({ count: 0 });
       expect(readdirSync(join(root, "tmp"))).toEqual([]);
@@ -188,7 +200,7 @@ describe("dashboard API", () => {
       const pdfId = repo.registerDocument(job.id, { documentType: "resume", language: language === "English" ? "en" : "de", format: "pdf", version: "v1", filePath: "/private/resume.pdf" });
       return { docx: repo.getDocument(docxId)!, pdf: repo.getDocument(pdfId)! };
     } };
-    const app = createApp(db, { documentGenerator: generator });
+    const app = createApp(db, { repositoryOptions, documentGenerator: generator });
     await request(app).post(`/api/jobs/${job.id}/documents`).send({ language: "French" }).expect(400);
     await request(app).post("/api/jobs/999999/documents").send({ language: "English" }).expect(404);
     const response = await request(app).post(`/api/jobs/${job.id}/documents`).send({ language: "German" }).expect(201);
@@ -201,7 +213,7 @@ describe("dashboard API", () => {
     const { db, repo } = setup();
     const job = repo.listJobs()[0] as { id: number };
     const generator: DocumentGenerator = { generate: async () => { throw Object.assign(new Error("Unavailable"), { code: "DOCUMENT_DEPENDENCY_UNAVAILABLE" }); } };
-    const response = await request(createApp(db, { documentGenerator: generator })).post(`/api/jobs/${job.id}/documents`).send({ language: "English" }).expect(503);
+    const response = await request(createApp(db, { repositoryOptions, documentGenerator: generator })).post(`/api/jobs/${job.id}/documents`).send({ language: "English" }).expect(503);
     expect(response.body).toMatchObject({ error: "Document generation is unavailable on this Mac" });
     expect(db.prepare("SELECT COUNT(*) AS count FROM documents").get()).toMatchObject({ count: 0 });
   });
@@ -340,7 +352,7 @@ describe("dashboard API", () => {
     });
     const followUp = db.prepare("SELECT id,draft FROM follow_ups WHERE application_id=? ORDER BY sequence LIMIT 1").get(applicationId) as { id: number; draft: string };
     const opened: unknown[] = [];
-    const app = createApp(db, { emailDraftOpener: async (target) => { opened.push(target); } });
+    const app = createApp(db, { repositoryOptions, emailDraftOpener: async (target) => { opened.push(target); } });
 
     await request(app).post(`/api/follow-ups/${followUp.id}/email-draft`).send({}).expect(201);
 
@@ -361,7 +373,7 @@ describe("dashboard API", () => {
     const { db, repo, applicationId } = setup();
     const jobId = Number((db.prepare("SELECT job_id FROM applications WHERE id=?").get(applicationId) as { job_id: number }).job_id);
     const followUpId = Number((db.prepare("SELECT id FROM follow_ups WHERE application_id=? ORDER BY sequence LIMIT 1").get(applicationId) as { id: number }).id);
-    const app = createApp(db, { emailDraftOpener: async () => { throw new Error("Mail unavailable"); } });
+    const app = createApp(db, { repositoryOptions, emailDraftOpener: async () => { throw new Error("Mail unavailable"); } });
 
     await request(app).post(`/api/follow-ups/${followUpId}/email-draft`).send({}).expect(409, { error: "No replyable email thread found" });
     repo.recordEmailEvidence(jobId, {

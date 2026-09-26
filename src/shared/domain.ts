@@ -1,8 +1,5 @@
 import type { DashboardJob, JobInput } from "./types.js";
-
-// Fictitious demo floors: no real candidate's compensation preferences.
-const demoMinimumSalary = 0;
-const demoMinimumDayRate = 0;
+import type { SearchPolicy } from "../server/config/schema.js";
 
 export function isWorkingJobUrl(value: string | null): boolean {
   if (!value) return false;
@@ -14,22 +11,23 @@ export function isWorkingJobUrl(value: string | null): boolean {
   }
 }
 
-export function rankApplyToday<T extends DashboardJob>(jobs: T[]): T[] {
+export function rankApplyToday<T extends DashboardJob>(jobs: T[], policy: SearchPolicy): T[] {
   const eligible = jobs.filter((job) =>
     (job.triage_status === "new" || job.triage_status === "shortlisted") &&
-    !job.application_id && job.duplicate_blocked !== 1
+    (!policy.excludeSponsorshipRequired || job.requires_sponsorship !== 1) &&
+    !job.application_id && job.duplicate_blocked !== 1 && policy.dailySelection[job.employment_type] > 0
   );
   const ranked = [...eligible].sort((left, right) => {
     const validLink = (url: string | null) => Number(isWorkingJobUrl(url));
     return right.score - left.score || validLink(right.url) - validLink(left.url) ||
       Date.parse(right.posted_at ?? right.created_at) - Date.parse(left.posted_at ?? left.created_at) || left.id - right.id;
   });
-  const permanent = ranked.filter((job) => job.employment_type === "permanent").slice(0, 4);
-  const freelance = ranked.filter((job) => job.employment_type === "freelance").slice(0, 1);
+  const permanent = ranked.filter((job) => job.employment_type === "permanent").slice(0, policy.dailySelection.permanent);
+  const freelance = ranked.filter((job) => job.employment_type === "freelance").slice(0, policy.dailySelection.freelance);
   const selected = new Set([...permanent, ...freelance].map((job) => job.id));
   const result = [...permanent, ...freelance];
   for (const job of ranked) {
-    if (result.length >= 5) break;
+    if (result.length >= policy.dailySelection.total) break;
     if (!selected.has(job.id)) result.push(job);
   }
   return result.sort((left, right) => ranked.indexOf(left) - ranked.indexOf(right));
@@ -45,8 +43,8 @@ function daysBetween(a: Date, b: Date) {
   return Math.floor(Math.abs(a.getTime() - b.getTime()) / 86_400_000);
 }
 
-export function scoreJob(job: Omit<JobInput, "company" | "source">, now = new Date()): ScoreResult {
-  if (job.requiresSponsorship) {
+export function scoreJob(job: Omit<JobInput, "company" | "source">, policy: SearchPolicy, now = new Date()): ScoreResult {
+  if (job.requiresSponsorship && policy.excludeSponsorshipRequired) {
     return { total: 0, excluded: true, reasons: ["Requires sponsorship"] };
   }
 
@@ -54,25 +52,25 @@ export function scoreJob(job: Omit<JobInput, "company" | "source">, now = new Da
   const reasons: string[] = [];
   let total = 0;
 
-  if (text.includes("react native") && text.includes("typescript")) {
-    total += 35;
-    reasons.push("Strong React Native/TypeScript match");
-  } else if (text.includes("react") && text.includes("typescript")) {
-    total += 28;
-    reasons.push("Strong React/TypeScript match");
-  } else if (text.includes("typescript") && (text.includes("node") || text.includes("full-stack") || text.includes("full stack"))) {
-    total += 22;
-    reasons.push("Relevant TypeScript full-stack match");
+  const match = policy.preferredKeywordGroups.filter((group) =>
+    group.allOf.every((keyword) => text.includes(keyword.toLowerCase())) &&
+    (!group.anyOf.length || group.anyOf.some((keyword) => text.includes(keyword.toLowerCase())))
+  ).sort((a, b) => b.score - a.score)[0];
+  if (match) {
+    total += match.score;
+    reasons.push(match.label);
   }
 
-  // The baseline gives every location the same score until local configuration is introduced.
-  total += 20;
-  reasons.push("Neutral demo location score");
-  if (/senior|staff|lead/.test(text)) total += 15;
+  const location = `${job.location ?? ""} ${job.workMode ?? ""}`.toLowerCase();
+  if (policy.locations.some((keyword) => location.includes(keyword.toLowerCase()))) {
+    total += 20;
+    reasons.push("Preferred location");
+  }
+  if (policy.seniorityKeywords.some((keyword) => text.includes(keyword.toLowerCase()))) total += 15;
 
   if (job.employmentType === "permanent") {
-    if (job.salaryMin == null || job.salaryMin >= demoMinimumSalary) total += 15;
-  } else if (job.dayRate == null || job.dayRate >= demoMinimumDayRate) {
+    if (job.salaryMin == null || job.salaryMin >= policy.permanentMinSalary) total += 15;
+  } else if (job.dayRate == null || job.dayRate >= policy.freelanceMinDayRate) {
     total += 15;
   }
 
@@ -82,7 +80,7 @@ export function scoreJob(job: Omit<JobInput, "company" | "source">, now = new Da
     total += age <= 7 ? 10 : age <= 30 ? 6 : 2;
   }
 
-  if (!job.language || /english|german|deutsch|englisch/i.test(job.language)) total += 5;
+  if (!job.language || policy.acceptedLanguages.some((language) => job.language!.toLowerCase().includes(language.toLowerCase()))) total += 5;
   return { total: Math.min(100, total), excluded: false, reasons };
 }
 
@@ -94,7 +92,7 @@ export function buildFollowUps(appliedAt: string) {
   }));
 }
 
-export function buildFollowUpDraft(company: string, title: string, sequence: number) {
+export function buildFollowUpDraft(company: string, title: string, sequence: number, signature: string) {
   const opening = sequence === 1 ? "I'm following up" : "I wanted to follow up once more";
-  return `Hello,\n\n${opening} on my application for the ${title} at ${company}. I remain very interested in the role and would be happy to provide any additional information.\n\nBest regards,\nAlex Morgan`;
+  return `Hello,\n\n${opening} on my application for the ${title} at ${company}. I remain very interested in the role and would be happy to provide any additional information.\n\nBest regards,\n${signature}`;
 }

@@ -27,7 +27,7 @@ export function isPlausibleRole(value: string | null) {
 
 export function isPlausibleCompany(value: string | null) {
   if (!value || value.length < 2 || value.length > 80) return false;
-  return !/^(?:this time|link|google|dayforce|myworkday|example-candidate|the beginning)|after careful consideration|thank you for your application/i.test(value);
+  return !/^(?:this time|link|google|dayforce|myworkday|the beginning)|after careful consideration|thank you for your application/i.test(value);
 }
 
 function extractRole(input: ClassifierInput) {

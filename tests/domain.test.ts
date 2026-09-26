@@ -1,3 +1,4 @@
+import { testConfig } from "./config-fixture.js";
 // Break caught: scoring or follow-up logic silently violates the agreed search policy.
 import { describe, expect, test } from "vitest";
 import { buildFollowUpDraft, buildFollowUps, rankApplyToday, scoreJob } from "../src/shared/domain.js";
@@ -7,32 +8,32 @@ describe("scoreJob", () => {
     const result = scoreJob({
       title: "Senior React Native Engineer",
       description: "React Native TypeScript Expo mobile app",
-      location: "Sample Harbor",
+      location: "Europe",
       employmentType: "permanent",
       salaryMin: 80000,
       requiresSponsorship: false,
       language: "English",
       postedAt: "2026-09-22"
-    }, new Date("2026-09-24T08:00:00Z"));
+    }, testConfig.search, new Date("2026-09-24T08:00:00Z"));
 
     expect(result.total).toBeGreaterThanOrEqual(85);
     expect(result.excluded).toBe(false);
-    expect(result.reasons).toContain("Strong React Native/TypeScript match");
+    expect(result.reasons).toContain("Mobile TypeScript");
   });
 
-  test("gives equal demo scores to all locations", () => {
+  test("scores only configured preferred locations", () => {
     const base = { title: "Senior React Native Engineer", description: "TypeScript", employmentType: "permanent" as const };
     const now = new Date("2026-09-24T08:00:00Z");
-    const scores = ["Sample Harbor", "Example Valley", "Remote", ""].map((location) => scoreJob({ ...base, location }, now).total);
-    expect(scores).toEqual([95, 95, 95, 95]);
+    const scores = ["Europe", "Example Valley", "Remote", ""].map((location) => scoreJob({ ...base, location }, testConfig.search, now).total);
+    expect(scores).toEqual([95, 75, 95, 75]);
   });
 
-  test.each(["permanent", "freelance"] as const)("uses a zero demo compensation floor for %s roles", (employmentType) => {
+  test.each(["permanent", "freelance"] as const)("uses configured compensation floors for %s roles", (employmentType) => {
     const base = { title: "Senior React Native Engineer", description: "TypeScript", location: "Remote", employmentType };
     const now = new Date("2026-09-24T08:00:00Z");
-    const unset = scoreJob(base, now).total;
-    expect(scoreJob({ ...base, salaryMin: 0, dayRate: 0 }, now).total).toBe(unset);
-    expect(scoreJob({ ...base, salaryMin: 1, dayRate: 1 }, now).total).toBe(unset);
+    const unset = scoreJob(base, testConfig.search, now).total;
+    expect(scoreJob({ ...base, salaryMin: 0, dayRate: 0 }, testConfig.search, now).total).toBe(unset - 15);
+    expect(scoreJob({ ...base, salaryMin: 1, dayRate: 1 }, testConfig.search, now).total).toBe(unset - 15);
   });
 
   test("excludes a role that requires sponsorship", () => {
@@ -42,7 +43,7 @@ describe("scoreJob", () => {
       location: "Berlin",
       employmentType: "permanent",
       requiresSponsorship: true
-    }, new Date("2026-09-24T08:00:00Z"));
+    }, testConfig.search, new Date("2026-09-24T08:00:00Z"));
 
     expect(result.excluded).toBe(true);
     expect(result.total).toBe(0);
@@ -58,8 +59,8 @@ describe("buildFollowUps", () => {
   });
 
   test("prepares a draft without sending it", () => {
-    expect(buildFollowUpDraft("Acme", "Senior React Engineer", 1)).toContain("Senior React Engineer at Acme");
-    expect(buildFollowUpDraft("Acme", "Senior React Engineer", 1)).toContain("Best regards,\nAlex Morgan");
+    expect(buildFollowUpDraft("Acme", "Senior React Engineer", 1, testConfig.candidate.signature)).toContain("Senior React Engineer at Acme");
+    expect(buildFollowUpDraft("Acme", "Senior React Engineer", 1, testConfig.candidate.signature)).toContain("Best regards,\nAlex Morgan");
   });
 });
 
@@ -74,7 +75,7 @@ describe("rankApplyToday", () => {
       { ...base, id: 11, score: 100, application_id: 4, employment_type: "permanent" },
       { ...base, id: 12, score: 100, triage_status: "skipped", employment_type: "permanent" }
     ];
-    const ranked = rankApplyToday(jobs);
+    const ranked = rankApplyToday(jobs, testConfig.search);
     expect(ranked.map((job) => job.id)).toEqual([1, 2, 3, 4, 7]);
     expect(ranked.filter((job) => job.employment_type === "freelance")).toHaveLength(1);
   });
@@ -88,7 +89,7 @@ describe("rankApplyToday", () => {
       { ...base, id: 4, score: 79, url: null, posted_at: "2026-09-21" },
       { ...base, id: 5, score: 78, url: null, posted_at: "2026-09-21" }
     ];
-    expect(rankApplyToday(jobs).map((job) => job.id)).toEqual([3, 2, 1, 4, 5]);
+    expect(rankApplyToday(jobs, testConfig.search).map((job) => job.id)).toEqual([3, 2, 1, 4, 5]);
   });
 
   test("does not treat malformed HTTP URLs as working links", () => {
@@ -96,6 +97,6 @@ describe("rankApplyToday", () => {
     expect(rankApplyToday([
       { ...base, id: 1, url: "https://bad host" },
       { ...base, id: 2, url: "https://jobs.example/valid" }
-    ]).map((job) => job.id)).toEqual([2, 1]);
+    ], testConfig.search).map((job) => job.id)).toEqual([2, 1]);
   });
 });

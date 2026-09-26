@@ -1,3 +1,4 @@
+import { migrationOptions, repositoryOptions } from "./config-fixture.js";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -18,51 +19,36 @@ afterEach(() => {
 function setup() {
   const db = createDatabase(":memory:");
   databases.push(db);
-  migrate(db);
+  migrate(db, migrationOptions);
   return { db, repo: new SearchSourceRepository(db) };
 }
 
 describe("search source migration", () => {
-  test("persists only unfiltered landing pages for the initial source catalog", () => {
+  test("persists the configured source URL", () => {
     const { repo } = setup();
-    expect(repo.list().map((source) => source.search_url)).toEqual([
-      "https://www.linkedin.com/jobs",
-      "https://www.arbeitsagentur.de/jobsuche",
-      "https://berlinstartupjobs.com",
-      "https://pegel.berlin",
-      "https://germantechjobs.de/en/jobs",
-      "https://wellfound.com/jobs",
-      "https://www.stepstone.de",
-      "https://de.indeed.com",
-      "https://join.com/jobs",
-      "https://www.xing.com/jobs",
-      "https://www.freelancermap.de/projektboerse.html",
-      "https://uplink.tech/freelancers",
-      "https://www.malt.de/c/freelancers",
-      "https://www.gulp.de/gulp2/g/projekte"
-    ]);
+    expect(repo.list().map((source) => source.search_url)).toEqual(["https://jobs.example.com/search"]);
   });
 
-  test("seeds 14 enabled defaults once and preserves edits to a seeded source", () => {
+  test("seeds configured sources once and preserves edits to a seeded source", () => {
     const { db } = setup();
-    expect(db.prepare("SELECT COUNT(*) count FROM search_sources").get()).toMatchObject({ count: 14 });
-    expect(db.prepare("SELECT COUNT(*) count FROM search_sources WHERE enabled=1").get()).toMatchObject({ count: 14 });
-    migrate(db);
-    expect(db.prepare("SELECT COUNT(*) count FROM search_sources").get()).toMatchObject({ count: 14 });
+    expect(db.prepare("SELECT COUNT(*) count FROM search_sources").get()).toMatchObject({ count: 1 });
+    expect(db.prepare("SELECT COUNT(*) count FROM search_sources WHERE enabled=1").get()).toMatchObject({ count: 1 });
+    migrate(db, migrationOptions);
+    expect(db.prepare("SELECT COUNT(*) count FROM search_sources").get()).toMatchObject({ count: 1 });
 
-    db.prepare("UPDATE search_sources SET name=?, search_url=? WHERE seed_key='linkedin'")
-      .run("My LinkedIn", "https://www.linkedin.com/jobs/search/?keywords=Custom");
-    migrate(db);
+    db.prepare("UPDATE search_sources SET name=?, search_url=? WHERE seed_key='example'")
+      .run("My Example", "https://www.example.com/jobs/search/?keywords=Custom");
+    migrate(db, migrationOptions);
 
-    expect(db.prepare("SELECT seed_key,name,search_url FROM search_sources WHERE seed_key='linkedin'").get())
-      .toEqual({ seed_key: "linkedin", name: "My LinkedIn", search_url: "https://www.linkedin.com/jobs/search/?keywords=Custom" });
-    expect(db.prepare("SELECT COUNT(*) count FROM search_sources WHERE seed_key='linkedin'").get()).toMatchObject({ count: 1 });
-    expect(db.prepare("SELECT COUNT(*) count FROM search_sources").get()).toMatchObject({ count: 14 });
+    expect(db.prepare("SELECT seed_key,name,search_url FROM search_sources WHERE seed_key='example'").get())
+      .toEqual({ seed_key: "example", name: "My Example", search_url: "https://www.example.com/jobs/search/?keywords=Custom" });
+    expect(db.prepare("SELECT COUNT(*) count FROM search_sources WHERE seed_key='example'").get()).toMatchObject({ count: 1 });
+    expect(db.prepare("SELECT COUNT(*) count FROM search_sources").get()).toMatchObject({ count: 1 });
   });
 
   test("adds a nullable source reference to existing jobs only once", () => {
     const { db } = setup();
-    migrate(db);
+    migrate(db, migrationOptions);
     const columns = db.prepare("PRAGMA table_info(jobs)").all() as Array<{ name: string; notnull: number }>;
     expect(columns.filter((column) => column.name === "search_source_id"))
       .toEqual([expect.objectContaining({ name: "search_source_id", notnull: 0 })]);
@@ -131,7 +117,7 @@ describe("SearchSourceRepository", () => {
     const filename = join(directory, "sources.sqlite");
     const db = createDatabase(filename);
     databases.push(db);
-    migrate(db);
+    migrate(db, migrationOptions);
     const repo = new SearchSourceRepository(db);
     const { id } = repo.create({ name: "Persistent", searchUrl: "https://persistent.example/jobs", category: "both" });
     repo.recordCheck(id, { status: "success", discoveredCount: 5, importedCount: 1, checkedAt: "2026-09-25T07:00:00.000Z" });
@@ -140,7 +126,7 @@ describe("SearchSourceRepository", () => {
 
     const reopened = createDatabase(filename);
     databases.push(reopened);
-    migrate(reopened);
+    migrate(reopened, migrationOptions);
     expect(new SearchSourceRepository(reopened).list().find((row) => row.id === id))
       .toMatchObject({ name: "Persistent", last_success_at: "2026-09-25T07:00:00.000Z", last_error: "Unavailable" });
     expect(reopened.prepare("SELECT COUNT(*) count FROM search_source_checks WHERE search_source_id=?").get(id))
@@ -151,9 +137,9 @@ describe("SearchSourceRepository", () => {
 describe("job search source attribution", () => {
   test("stores an enabled registered source on insert and update", () => {
     const { db, repo } = setup();
-    const first = repo.create({ name: "React Native EU", searchUrl: "https://jobs.example.com/search", category: "both" });
+    const first = repo.create({ name: "React Native EU", searchUrl: "https://jobs.example.com/custom", category: "both" });
     const second = repo.create({ name: "EU Tech", searchUrl: "https://tech.example.com/search", category: "permanent" });
-    const jobs = new JobRepository(db);
+    const jobs = new JobRepository(db, repositoryOptions);
     const input = { company: "Example", title: "React Native Engineer", employmentType: "permanent" as const, source: "Imported feed", url: "https://example.com/job/1" };
     const inserted = jobs.upsertJob({ ...input, searchSourceId: first.id });
     expect(inserted).toMatchObject({ search_source_id: first.id, source: first.name });
@@ -165,7 +151,7 @@ describe("job search source attribution", () => {
   test("rejects unknown and disabled ids before touching an existing job", () => {
     const { db, repo } = setup();
     const disabled = repo.create({ name: "Disabled", searchUrl: "https://disabled.example.com/search", category: "both", enabled: false });
-    const jobs = new JobRepository(db);
+    const jobs = new JobRepository(db, repositoryOptions);
     const input = { company: "Example", title: "React Native Engineer", employmentType: "permanent" as const, source: "Legacy feed", url: "https://example.com/job/2" };
     const original = jobs.upsertJob(input);
     for (const searchSourceId of [999999, disabled.id]) {
@@ -177,14 +163,14 @@ describe("job search source attribution", () => {
 
   test("keeps legacy imports without a search source id", () => {
     const { db } = setup();
-    const job = new JobRepository(db).upsertJob({ company: "Legacy", title: "Engineer", employmentType: "freelance", source: "Manual import" });
+    const job = new JobRepository(db, repositoryOptions).upsertJob({ company: "Legacy", title: "Engineer", employmentType: "freelance", source: "Manual import" });
     expect(job).toMatchObject({ source: "Manual import", search_source_id: null });
   });
 
   test("preserves registered provenance when a matching legacy import omits the id", () => {
     const { db, repo } = setup();
     const registered = repo.create({ name: "Registered feed", searchUrl: "https://registered.example/jobs", category: "both" });
-    const jobs = new JobRepository(db);
+    const jobs = new JobRepository(db, repositoryOptions);
     const input = { company: "Example", title: "React Native Engineer", employmentType: "permanent" as const, url: "https://example.com/job/3" };
     const first = jobs.upsertJob({ ...input, source: "Import", searchSourceId: registered.id });
 
@@ -196,7 +182,7 @@ describe("job search source attribution", () => {
   test("explicit null clears registered provenance and uses the incoming source", () => {
     const { db, repo } = setup();
     const registered = repo.create({ name: "Registered feed", searchUrl: "https://registered.example/jobs", category: "both" });
-    const jobs = new JobRepository(db);
+    const jobs = new JobRepository(db, repositoryOptions);
     const input = { company: "Example", title: "React Native Engineer", employmentType: "permanent" as const, url: "https://example.com/job/4" };
     const first = jobs.upsertJob({ ...input, source: "Import", searchSourceId: registered.id });
 

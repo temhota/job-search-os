@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import type { DashboardApplication, DashboardJob, EmailEvidenceInput, EvidenceReviewAction, FollowUpAction, ISODateString, JobInput, JobTriageStatus, PipelineView, ReviewAttentionEvidence, TodayAttentionItem, WeeklyProgressPeriod } from "../../shared/types.js";
 import { buildFollowUpDraft, buildFollowUps, rankApplyToday, scoreJob } from "../../shared/domain.js";
 import { classifyEmail } from "../mail/classifier.js";
-import { approvedAppleMailAccounts } from "../mail/accounts.js";
+import type { RepositoryOptions } from "../../shared/types.js";
 import { isReplyableSender, parseSingleSenderAddress } from "../mail/address.js";
 import type { SqliteDatabase } from "./database.js";
 
@@ -65,7 +65,7 @@ export function fingerprintJob(job: Pick<JobInput, "company" | "title" | "url" |
 }
 
 export class JobRepository {
-  constructor(private readonly db: SqliteDatabase) {}
+  constructor(private readonly db: SqliteDatabase, private readonly options: RepositoryOptions) {}
 
   upsertJob(input: JobInput) {
     const registeredSource = input.searchSourceId == null ? null : this.db.prepare(
@@ -73,10 +73,9 @@ export class JobRepository {
     ).get(input.searchSourceId) as { id: number; name: string } | undefined;
     if (input.searchSourceId != null && !registeredSource) throw new Error("Search source is unavailable");
     const fingerprint = fingerprintJob(input);
-    const score = scoreJob(input).total;
-    let existing = this.db.prepare("SELECT id,source,search_source_id FROM jobs WHERE fingerprint = ?").get(fingerprint) as { id: number; source: string; search_source_id: number | null } | undefined;
+    let existing = this.db.prepare("SELECT id,source,search_source_id,requires_sponsorship FROM jobs WHERE fingerprint = ?").get(fingerprint) as { id: number; source: string; search_source_id: number | null; requires_sponsorship: number } | undefined;
     if (!existing) {
-      const companyJobs = this.db.prepare("SELECT id,title,location,description,source,search_source_id FROM jobs WHERE lower(company) = lower(?)").all(input.company) as Array<{ id: number; title: string; location: string | null; description: string | null; source: string; search_source_id: number | null }>;
+      const companyJobs = this.db.prepare("SELECT id,title,location,description,source,search_source_id,requires_sponsorship FROM jobs WHERE lower(company) = lower(?)").all(input.company) as Array<{ id: number; title: string; location: string | null; description: string | null; source: string; search_source_id: number | null; requires_sponsorship: number }>;
       const likely = companyJobs.find((job) => {
         const titleMatch = similarity(job.title, input.title);
         const locationCompatible = !job.location || !input.location || similarity(job.location, input.location) >= 0.25;
@@ -85,21 +84,23 @@ export class JobRepository {
       });
       if (likely) existing = likely;
     }
+    const requiresSponsorship = input.requiresSponsorship ?? existing?.requires_sponsorship === 1;
+    const score = scoreJob({ ...input, requiresSponsorship }, this.options.search).total;
     const retainedSource = input.searchSourceId === undefined && existing?.search_source_id != null ? existing : null;
     const source = retainedSource ? retainedSource.source : registeredSource?.name ?? input.source;
     const searchSourceId = retainedSource ? retainedSource.search_source_id : registeredSource?.id ?? null;
     if (existing) {
       this.db.prepare(`UPDATE jobs SET source = ?, search_source_id = ?, description = COALESCE(?, description), location = COALESCE(?, location),
         employment_type = ?, salary_min = COALESCE(?, salary_min), salary_max = COALESCE(?, salary_max), day_rate = COALESCE(?, day_rate),
-        score = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
-        .run(source, searchSourceId, input.description ?? null, input.location ?? null, input.employmentType, input.salaryMin ?? null, input.salaryMax ?? null, input.dayRate ?? null, score, existing.id);
+        requires_sponsorship = ?, score = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
+        .run(source, searchSourceId, input.description ?? null, input.location ?? null, input.employmentType, input.salaryMin ?? null, input.salaryMax ?? null, input.dayRate ?? null, Number(requiresSponsorship), score, existing.id);
       return this.getJob(existing.id);
     }
 
     const sameCompany = this.db.prepare("SELECT 1 FROM jobs WHERE lower(company) = lower(?) LIMIT 1").get(input.company);
     const result = this.db.prepare(`
-      INSERT INTO jobs (company,title,url,description,location,work_mode,employment_type,salary_min,salary_max,day_rate,source,search_source_id,posted_at,score,fingerprint)
-      VALUES (@company,@title,@url,@description,@location,@workMode,@employmentType,@salaryMin,@salaryMax,@dayRate,@source,@searchSourceId,@postedAt,@score,@fingerprint)
+      INSERT INTO jobs (company,title,url,description,location,work_mode,employment_type,salary_min,salary_max,day_rate,source,search_source_id,posted_at,requires_sponsorship,score,fingerprint)
+      VALUES (@company,@title,@url,@description,@location,@workMode,@employmentType,@salaryMin,@salaryMax,@dayRate,@source,@searchSourceId,@postedAt,@requiresSponsorship,@score,@fingerprint)
     `).run({
       ...input,
       url: input.url ?? null,
@@ -112,6 +113,7 @@ export class JobRepository {
       source,
       searchSourceId,
       postedAt: input.postedAt ?? null,
+      requiresSponsorship: Number(requiresSponsorship),
       score,
       fingerprint
     });
@@ -232,7 +234,7 @@ export class JobRepository {
     const application = this.db.prepare("SELECT jobs.company,jobs.title FROM applications JOIN jobs ON jobs.id = applications.job_id WHERE applications.id = ?").get(applicationId) as { company: string; title: string };
     const insert = this.db.prepare("INSERT OR IGNORE INTO follow_ups (application_id,sequence,due_at,draft) VALUES (?,?,?,?)");
     for (const followUp of buildFollowUps(appliedAt)) {
-      insert.run(applicationId, followUp.sequence, followUp.dueAt, buildFollowUpDraft(application.company, application.title, followUp.sequence));
+      insert.run(applicationId, followUp.sequence, followUp.dueAt, buildFollowUpDraft(application.company, application.title, followUp.sequence, this.options.followUpSignature));
     }
   }
 
@@ -257,7 +259,7 @@ export class JobRepository {
         AND email_evidence.needs_review = 0 AND email_evidence.classification <> 'ignored'
       ORDER BY email_evidence.received_at DESC, email_evidence.id DESC
     `).all(id) as Array<{ follow_up_id: number; draft: string; message_id: string; account: string; mailbox: string; sender: string; subject: string }>;
-    const target = rows.find((row) => approvedAppleMailAccounts.has(row.account) && row.mailbox.toLowerCase() === "inbox" && isReplyableSender(row.sender));
+    const target = rows.find((row) => this.options.mail.accounts.has(row.account) && row.mailbox.toLowerCase() === "inbox" && isReplyableSender(row.sender, this.options.mail.senderAddresses));
     const followUp = this.db.prepare("SELECT due_at FROM follow_ups WHERE id=? AND status='pending'").get(id) as { due_at: string } | undefined;
     if (!followUp || berlinCalendarDay(followUp.due_at) > berlinCalendarDay(today)) return null;
     return target ? {
@@ -473,7 +475,7 @@ export class JobRepository {
   }
 
   private selectApplyToday() {
-    return rankApplyToday(this.listJobs() as DashboardJob[]);
+    return rankApplyToday(this.listJobs() as DashboardJob[], this.options.search);
   }
 
   private selectPipeline(now: string): PipelineView {
@@ -609,6 +611,7 @@ export class JobRepository {
     const followUpToday = dueFollowUps.slice(0, 10);
     const reviewQueue = this.listReviewQueue() as ReviewAttentionEvidence[];
     return {
+      searchSelection: { ...this.options.search.dailySelection },
       summary: {
         jobs: jobs.length,
         applications: applications.length,

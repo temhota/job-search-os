@@ -1,4 +1,5 @@
-// Break caught: generated application material invents unconfirmed release ownership or leaks the weak GitHub profile.
+import { migrationOptions, repositoryOptions, testConfig } from "./config-fixture.js";
+// Break caught: generated application material ignores the configured content or invents claims.
 import { mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
@@ -15,33 +16,33 @@ function fixture(company = "Northstar Health") {
   const root = mkdtempSync(join(tmpdir(), "job-documents-"));
   roots.push(root);
   const db = createDatabase(":memory:");
-  migrate(db);
-  const repo = new JobRepository(db);
+  migrate(db, migrationOptions);
+  const repo = new JobRepository(db, repositoryOptions);
   const job = repo.upsertJob({ company, title: "Senior React Native Engineer", description: "React Native Expo", employmentType: "permanent", source: "web" });
   return { root, db, repo, job };
 }
 
 describe("resumeContentForJob", () => {
-  test("shows the example career break as completed in every generated CV language", () => {
-    expect(resumeContentForJob({ company: "Example_Labs", title: "React Native Engineer" }, "English").careerNote)
-      .toBe("Career Break | Jan 2025 - Jun 2025");
-    expect(resumeContentForJob({ company: "Example_Labs", title: "React Native Engineer" }, "German").careerNote)
-      .toBe("Berufliche Auszeit | Jan 2025 - Jun 2025");
+  test("preserves an empty optional career note in both languages", () => {
+    expect(resumeContentForJob({ company: "Example_Labs", title: "React Native Engineer" }, "English", testConfig.candidate.resumes).careerNote)
+      .toBe("");
+    expect(resumeContentForJob({ company: "Example_Labs", title: "React Native Engineer" }, "German", testConfig.candidate.resumes).careerNote)
+      .toBe("");
   });
 
   test("uses confirmed React Native evidence for Northstar Health without unverified claims", () => {
-    const content = resumeContentForJob({ company: "Northstar Health", title: "Senior Software Engineer (Mobile / React Native)", description: "React Native Expo EAS TypeScript" });
-    expect(content.headline).toBe("SENIOR SOFTWARE ENGINEER - REACT NATIVE");
-    expect(content.summary).toContain("7+ years");
+    const content = resumeContentForJob({ company: "Northstar Health", title: "Senior Software Engineer (Mobile / React Native)", description: "React Native Expo EAS TypeScript" }, "English", testConfig.candidate.resumes);
+    expect(content.headline).toBe("SOFTWARE ENGINEER - MOBILE");
+    expect(content.summary).toContain("accessible mobile");
     expect(content.skills[0]).toContain("React Native");
     expect(content.contactLine).not.toContain("GitHub");
     expect(JSON.stringify(content)).not.toMatch(/independently published|App Store ownership|Google Play ownership/i);
   });
   test("German package translates labels and factual experience without adding claims", () => {
-    const content = resumeContentForJob({ company: "Northstar Health", title: "Senior React Native Engineer" }, "German");
+    const content = resumeContentForJob({ company: "Northstar Health", title: "Senior React Native Engineer" }, "German", testConfig.candidate.resumes);
     expect(content.language).toBe("German");
-    expect(content.summary).toContain("7 Jahren");
-    expect(content.experience[0].bullets[4]).toContain("bestehenden Expo/EAS-Prozess");
+    expect(content.summary).toContain("zugängliche mobile");
+    expect(content.experience[0].bullets[0]).toContain("Beispielanwendungen");
     expect(JSON.stringify(content)).not.toMatch(/github|App Store|Google Play|OTA|team lead/i);
   });
 });
@@ -60,7 +61,7 @@ describe("document generator", () => {
         const outDir = args[args.indexOf("--outdir") + 1];
         writeFileSync(join(outDir, basename(args.at(-1)!).replace(/\.docx$/, ".pdf")), `pdf-${generation}`);
       }
-    });
+    }, testConfig.candidate);
     const first = await generator.generate(job.id, "English");
     const second = await generator.generate(other.id, "German");
     expect(first.docx.file_path).not.toBe(second.docx.file_path);
@@ -89,7 +90,7 @@ describe("document generator", () => {
         const input = args.at(-1)!;
         writeFileSync(join(outDir, basename(input).replace(/\.docx$/, ".pdf")), `pdf-${generation}`);
       }
-    });
+    }, testConfig.candidate);
 
     const first = await generator.generate(job.id, "English");
     const second = await generator.generate(job.id, "German");
@@ -136,10 +137,10 @@ describe("document generator", () => {
       calls.push({ command, args });
       if (args.some((arg) => arg.endsWith("generate-resume.py"))) {
         const payload = JSON.parse(readFileSync(args[1], "utf8"));
-        expect(payload.name).toBe("ALEX MORGAN");
-        expect(payload.contactLine).toBe("Berlin, Germany | candidate@example.com | linkedin.com/in/example-candidate");
+        expect(payload.name).toBe("Alex Morgan");
+        expect(payload.contactLine).toBe("Europe | candidate@example.com");
         expect(payload.experience.map((item: { company: string }) => item.company)).toEqual([
-          "Example Labs", "Demo Commerce", "Sample University"
+          "Example Studio"
         ]);
         expect(payload.language).toBe("English");
         expect(JSON.stringify(payload)).not.toMatch(/github\.com|independently published|app store ownership/i);
@@ -150,7 +151,7 @@ describe("document generator", () => {
         const outDir = args[args.indexOf("--outdir") + 1];
         writeFileSync(join(outDir, args.at(-1)!.split("/").at(-1)!.replace(/\.docx$/, ".pdf")), "pdf");
       }
-    });
+    }, testConfig.candidate);
     const pair = await generator.generate(job.id, "English");
     expect(calls).toHaveLength(2);
     expect(pair.docx).toMatchObject({ job_id: job.id, format: "docx", language: "en" });
@@ -166,7 +167,7 @@ describe("document generator", () => {
     const { root, db, repo, job } = fixture();
     const generator = createDocumentGenerator(repo, root, async (_command, args) => {
       if (args.some((arg) => arg.endsWith("generate-resume.py"))) writeFileSync(args[2], "docx");
-    });
+    }, testConfig.candidate);
     await expect(generator.generate(job.id, "German")).rejects.toThrow();
     expect(db.prepare("SELECT COUNT(*) AS count FROM documents").get()).toMatchObject({ count: 0 });
     expect(readdirSync(join(root, "tmp"))).toEqual([]);
@@ -175,7 +176,7 @@ describe("document generator", () => {
 
   test("does not register either document if Python produces no DOCX", async () => {
     const { root, db, repo, job } = fixture();
-    const generator = createDocumentGenerator(repo, root, async () => {});
+    const generator = createDocumentGenerator(repo, root, async () => {}, testConfig.candidate);
     await expect(generator.generate(job.id, "English")).rejects.toThrow("DOCX generation produced no file");
     expect(db.prepare("SELECT COUNT(*) AS count FROM documents").get()).toMatchObject({ count: 0 });
     expect(readdirSync(join(root, "tmp"))).toEqual([]);
@@ -185,7 +186,7 @@ describe("document generator", () => {
   test("removes a partially written payload when the filesystem write fails", async () => {
     const { root, db, repo, job } = fixture();
     let processes = 0;
-    const generator = createDocumentGenerator(repo, root, async () => { processes += 1; }, (path, content) => {
+    const generator = createDocumentGenerator(repo, root, async () => { processes += 1; }, testConfig.candidate, (path, content) => {
       writeFileSync(path, content.slice(0, 12));
       throw new Error("disk full during payload write");
     });
@@ -203,15 +204,15 @@ describe("document generator", () => {
       if (args.some((arg) => arg.endsWith("generate-resume.py"))) {
         const payload = JSON.parse(readFileSync(args[1], "utf8"));
         expect(payload.language).toBe("German");
-        expect(payload.summary).toContain("7 Jahren");
-        expect(payload.experience[0].bullets[4]).toContain("bestehenden Expo/EAS-Prozess");
+        expect(payload.summary).toContain("zugängliche mobile");
+        expect(payload.experience[0].bullets[0]).toContain("Beispielanwendungen");
         expect(JSON.stringify(payload)).not.toMatch(/github|app store|google play|OTA|team lead/i);
         writeFileSync(args[2], "docx");
       } else {
         const outDir = args[args.indexOf("--outdir") + 1];
         writeFileSync(join(outDir, args.at(-1)!.split("/").at(-1)!.replace(/\.docx$/, ".pdf")), "pdf");
       }
-    });
+    }, testConfig.candidate);
     const pair = await generator.generate(job.id, "German");
     expect(pair.docx).toMatchObject({ language: "de" });
     expect(pair.pdf).toMatchObject({ language: "de" });

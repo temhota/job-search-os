@@ -1,3 +1,4 @@
+import { mailPolicy } from "./config-fixture.js";
 // Break caught: the importer reads arbitrary personal mail bodies instead of job-search candidates only.
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -89,7 +90,7 @@ describe("Apple Mail follow-up drafts", () => {
 
   test("uses a safe Reply-To and an approved identity from the source account", async () => {
     const calls: string[][] = [];
-    await openAppleMailReplyDraft(target, async (_file, args) => {
+    await openAppleMailReplyDraft(target, mailPolicy, async (_file, args) => {
       calls.push(args);
       if (args[0].endsWith("inspect-apple-mail-message.applescript")) {
         return { stdout: "Recruiter <replies@example.com>\u001fcandidate@example.com", stderr: "" };
@@ -103,7 +104,7 @@ describe("Apple Mail follow-up drafts", () => {
 
   test("rejects an unsafe Reply-To before creating the draft", async () => {
     const calls: string[][] = [];
-    await expect(openAppleMailReplyDraft(target, async (_file, args) => {
+    await expect(openAppleMailReplyDraft(target, mailPolicy, async (_file, args) => {
       calls.push(args);
       return { stdout: "No Reply <no_reply@example.com>\u001fcandidate@example.com", stderr: "" };
     })).rejects.toThrow("Apple Mail reply address is not safe");
@@ -112,7 +113,7 @@ describe("Apple Mail follow-up drafts", () => {
 
   test("rejects unapproved accounts before invoking Apple Mail", async () => {
     let invoked = false;
-    await expect(openAppleMailReplyDraft({ ...target, account: "former@example.com" }, async () => {
+    await expect(openAppleMailReplyDraft({ ...target, account: "former@example.com" }, mailPolicy, async () => {
       invoked = true;
       return { stdout: "", stderr: "" };
     })).rejects.toThrow("Apple Mail account is not approved");

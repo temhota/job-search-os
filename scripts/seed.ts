@@ -2,11 +2,14 @@ import { mkdirSync } from "node:fs";
 import { resolve } from "node:path";
 import { createDatabase, migrate } from "../src/server/db/database.js";
 import { JobRepository } from "../src/server/db/repository.js";
+import { loadAppConfig } from "../src/server/config/load.js";
+import { toRuntimeDependencies } from "../src/server/config/runtime.js";
 
-mkdirSync("data", { recursive: true });
-const db = createDatabase(resolve("data/jobs.db"));
-migrate(db);
-const repo = new JobRepository(db);
+const { config, dataDir, repositoryOptions } = toRuntimeDependencies(loadAppConfig());
+mkdirSync(dataDir, { recursive: true });
+const db = createDatabase(resolve(dataDir, "jobs.db"));
+migrate(db, { searchSources: config.search.sources, followUpSignature: config.candidate.signature });
+const repo = new JobRepository(db, repositoryOptions);
 
 const jobs = [
   { company: "Northstar Health", title: "Senior React Native Engineer", url: "https://jobs.example.com/northstar-mobile", description: "React Native TypeScript Expo mobile application", location: "Germany Remote", employmentType: "permanent" as const },

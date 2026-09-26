@@ -1,9 +1,12 @@
 import { resolve } from "node:path";
+import { mkdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
 import { createDatabase, migrate } from "../src/server/db/database.js";
 import { SearchSourceRepository } from "../src/server/search-sources/repository.js";
 import type { SearchSourceCheckInput } from "../src/shared/types.js";
+import { loadAppConfig } from "../src/server/config/load.js";
+import { toRuntimeDependencies } from "../src/server/config/runtime.js";
 
 const usage = "Usage: search-sources list | record SOURCE_ID STATUS DISCOVERED IMPORTED CHECKED_AT [ERROR]";
 
@@ -37,15 +40,17 @@ function parseCommand(args: string[]): { kind: "list" } | { kind: "record"; sour
 
 export function runSearchSourcesCli(
   args: string[],
-  dbPath = resolve("data/jobs.db"),
+  dbPath: string | undefined = undefined,
   write = console.log,
   writeError = console.error
 ): number {
   let db: ReturnType<typeof createDatabase> | undefined;
   try {
     const command = parseCommand(args);
-    db = createDatabase(dbPath);
-    migrate(db);
+    const { config, dataDir } = toRuntimeDependencies(loadAppConfig());
+    if (!dbPath) mkdirSync(dataDir, { recursive: true });
+    db = createDatabase(dbPath ?? resolve(dataDir, "jobs.db"));
+    migrate(db, { searchSources: config.search.sources, followUpSignature: config.candidate.signature });
     const repo = new SearchSourceRepository(db);
     if (command.kind === "list") {
       write(JSON.stringify(repo.listEnabled(), null, 2));

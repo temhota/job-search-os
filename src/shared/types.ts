@@ -1,3 +1,16 @@
+import type { SearchPolicy } from "../server/config/schema.js";
+
+export interface MailPolicy {
+  accounts: ReadonlySet<string>;
+  senderAddresses: ReadonlySet<string>;
+}
+
+export interface RepositoryOptions {
+  mail: MailPolicy;
+  search: SearchPolicy;
+  followUpSignature: string;
+}
+
 export const applicationStatuses = [
   "applied",
   "recruiter_screen",
@@ -50,6 +63,7 @@ export interface SearchSourceCheckInput {
 
 export interface DashboardJob {
   id: number;
+  requires_sponsorship?: number;
   score: number;
   url: string | null;
   posted_at: string | null;

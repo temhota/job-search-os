@@ -1,3 +1,4 @@
+import { migrationOptions, repositoryOptions } from "./config-fixture.js";
 // @vitest-environment node
 // Break caught: the development proxy rewrites Host, so a same-origin browser PATCH is rejected at the API boundary.
 import { createServer } from "vite";
@@ -10,11 +11,11 @@ import { JobRepository } from "../src/server/db/repository.js";
 
 test("Vite proxy preserves local same-origin mutations and rejects foreign requests", async () => {
   const db = createDatabase(":memory:");
-  migrate(db);
-  const repo = new JobRepository(db);
+  migrate(db, migrationOptions);
+  const repo = new JobRepository(db, repositoryOptions);
   const job = repo.upsertJob({ company: "Acme", title: "Engineer", employmentType: "permanent", source: "web" });
   const applicationId = repo.upsertApplication(job.id, "applied", "2026-09-24T09:00:00.000Z");
-  const apiServer = createApp(db).listen(0, "127.0.0.1");
+  const apiServer = createApp(db, { repositoryOptions }).listen(0, "127.0.0.1");
   let vite: Awaited<ReturnType<typeof createServer>> | undefined;
   try {
     await new Promise<void>((resolve) => apiServer.once("listening", resolve));

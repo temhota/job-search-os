@@ -1,14 +1,17 @@
+import { migrationOptions } from "./config-fixture.js";
 import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { afterEach, describe, expect, test } from "vitest";
+import { join, resolve } from "node:path";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { runSearchSourcesCli } from "../scripts/search-sources.js";
 import { createDatabase, migrate } from "../src/server/db/database.js";
 import { SearchSourceRepository } from "../src/server/search-sources/repository.js";
 
 const directories: string[] = [];
+beforeEach(() => vi.stubEnv("JOB_SEARCH_CONFIG", resolve("config/example.json")));
 
 afterEach(() => {
+  vi.unstubAllEnvs();
   for (const directory of directories.splice(0)) rmSync(directory, { recursive: true, force: true });
 });
 
@@ -17,7 +20,7 @@ function setup() {
   directories.push(directory);
   const dbPath = join(directory, "sources.sqlite");
   const db = createDatabase(dbPath);
-  migrate(db);
+  migrate(db, migrationOptions);
   const repo = new SearchSourceRepository(db);
   const disabled = repo.create({
     name: "Disabled custom source",
@@ -38,8 +41,8 @@ describe("search sources CLI", () => {
     expect(rows.length).toBeGreaterThan(0);
     expect(rows.every((row) => row.enabled === 1)).toBe(true);
     expect(rows.some((row) => row.id === disabled.id)).toBe(false);
-    expect(rows.find((row) => row.search_url.startsWith("https://www.linkedin.com"))?.search_url)
-      .toBe("https://www.linkedin.com/jobs");
+    expect(rows.find((row) => row.search_url.startsWith("https://jobs.example.com"))?.search_url)
+      .toBe("https://jobs.example.com/search");
     expect(rows.every((row) => new URL(row.search_url).search === "")).toBe(true);
   });
 

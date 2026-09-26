@@ -6,6 +6,7 @@ import { join, resolve } from "node:path";
 import { promisify } from "node:util";
 import type { JobRepository } from "../db/repository.js";
 import { resumeContentForJob } from "./content.js";
+import type { AppConfig } from "../config/schema.js";
 
 export type DocumentLanguage = "English" | "German";
 export type ProcessRunner = (command: string, args: string[]) => Promise<void>;
@@ -51,6 +52,7 @@ export function createDocumentGenerator(
   repo: JobRepository,
   outputRoot: string,
   run: ProcessRunner,
+  candidate: Pick<AppConfig["candidate"], "filenameStem" | "resumes">,
   write: PayloadWriter = writePayload,
   commands: DocumentCommands = resolveDocumentCommands()
 ): DocumentGenerator {
@@ -62,7 +64,7 @@ export function createDocumentGenerator(
       const docxDir = resolve(outputRoot, "docx", String(jobId));
       const pdfDir = resolve(outputRoot, "pdf", String(jobId));
       for (const dir of [tmpDir, resolve(outputRoot, "docx"), resolve(outputRoot, "pdf")]) mkdirSync(dir, { recursive: true });
-      const stem = `Alex_Morgan_CV_${companyFilenamePart(String(job.company))}`;
+      const stem = `${candidate.filenameStem}_${companyFilenamePart(String(job.company))}`;
       const stagingDir = join(tmpDir, randomUUID());
       mkdirSync(stagingDir, { recursive: true });
       const payloadPath = join(stagingDir, "payload.json");
@@ -71,7 +73,7 @@ export function createDocumentGenerator(
       const docxPath = join(docxDir, `${stem}.docx`);
       const pdfPath = join(pdfDir, `${stem}.pdf`);
       try {
-        write(payloadPath, JSON.stringify(resumeContentForJob({ company: String(job.company), title: String(job.title), description: typeof job.description === "string" ? job.description : null }, language)));
+        write(payloadPath, JSON.stringify(resumeContentForJob({ company: String(job.company), title: String(job.title), description: typeof job.description === "string" ? job.description : null }, language, candidate.resumes)));
         await run(commands.python, [resolve(process.cwd(), "scripts/generate-resume.py"), payloadPath, stagedDocxPath]);
         if (!existsSync(stagedDocxPath)) throw new Error("DOCX generation produced no file");
         await run(commands.soffice, ["--headless", "--convert-to", "pdf", "--outdir", stagingDir, stagedDocxPath]);

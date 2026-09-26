@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import { basename } from "node:path";
 import { z } from "zod";
 import { applicationStatuses, jobTriageStatuses } from "../shared/types.js";
+import type { RepositoryOptions } from "../shared/types.js";
 import { berlinCalendarDay } from "../shared/berlin-date.js";
 import type { SqliteDatabase } from "./db/database.js";
 import { JobRepository } from "./db/repository.js";
@@ -82,9 +83,9 @@ export interface FollowUpDraftTarget {
 
 export type EmailDraftOpener = (target: FollowUpDraftTarget) => Promise<void>;
 
-export function createApp(db: SqliteDatabase, options: { documentGenerator?: DocumentGenerator; emailDraftOpener?: EmailDraftOpener } = {}) {
+export function createApp(db: SqliteDatabase, options: { repositoryOptions: RepositoryOptions; documentGenerator?: DocumentGenerator; emailDraftOpener?: EmailDraftOpener }) {
   const app = express();
-  const repo = new JobRepository(db);
+  const repo = new JobRepository(db, options.repositoryOptions);
   const sourceRepo = new SearchSourceRepository(db);
   app.use((request, response, next) => {
     const host = request.headers.host;

@@ -1,5 +1,6 @@
 import Database from "better-sqlite3";
-import { DEFAULT_SEARCH_SOURCES, normalizeSearchUrl } from "../search-sources/catalog.js";
+import { normalizeSearchUrl } from "../search-sources/catalog.js";
+import type { AppConfig } from "../config/schema.js";
 
 export type SqliteDatabase = InstanceType<typeof Database>;
 
@@ -10,7 +11,7 @@ export function createDatabase(filename: string): SqliteDatabase {
   return db;
 }
 
-export function migrate(db: SqliteDatabase) {
+export function migrate(db: SqliteDatabase, options: { searchSources: AppConfig["search"]["sources"]; followUpSignature: string }) {
   db.exec(`
     CREATE TABLE IF NOT EXISTS jobs (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -165,6 +166,9 @@ export function migrate(db: SqliteDatabase) {
   `);
 
   const jobColumns = new Set((db.prepare("PRAGMA table_info(jobs)").all() as Array<{ name: string }>).map((column) => column.name));
+  if (!jobColumns.has("requires_sponsorship")) {
+    db.exec("ALTER TABLE jobs ADD COLUMN requires_sponsorship INTEGER NOT NULL DEFAULT 0 CHECK(requires_sponsorship IN (0,1))");
+  }
   if (!jobColumns.has("triage_status")) {
     db.exec("ALTER TABLE jobs ADD COLUMN triage_status TEXT NOT NULL DEFAULT 'new' CHECK(triage_status IN ('new','shortlisted','skipped','expired'))");
   }
@@ -175,7 +179,7 @@ export function migrate(db: SqliteDatabase) {
 
   const findSeed = db.prepare("SELECT id FROM search_sources WHERE seed_key = ?");
   const insertSeed = db.prepare("INSERT INTO search_sources (seed_key,name,search_url,url_fingerprint,category) VALUES (?,?,?,?,?)");
-  for (const source of DEFAULT_SEARCH_SOURCES) {
+  for (const source of options.searchSources) {
     if (!findSeed.get(source.seedKey)) {
       insertSeed.run(source.seedKey, source.name, source.searchUrl, normalizeSearchUrl(source.searchUrl), source.category);
     }
@@ -198,7 +202,7 @@ export function migrate(db: SqliteDatabase) {
     INSERT OR IGNORE INTO application_status_events (application_id,status,occurred_at,source)
       SELECT id,status,stage_entered_at,'migration' FROM applications WHERE stage_entered_at IS NOT NULL;
   `);
-  db.exec(`
+  db.prepare(`
     UPDATE follow_ups SET draft =
       'Hello,' || char(10) || char(10) ||
       CASE WHEN sequence = 1 THEN 'I''m following up' ELSE 'I wanted to follow up once more' END ||
@@ -207,9 +211,9 @@ export function migrate(db: SqliteDatabase) {
       ' at ' ||
       (SELECT jobs.company FROM applications JOIN jobs ON jobs.id = applications.job_id WHERE applications.id = follow_ups.application_id) ||
       '. I remain very interested in the role and would be happy to provide any additional information.' || char(10) || char(10) ||
-      'Best regards,' || char(10) || 'Alex Morgan'
+      'Best regards,' || char(10) || ?
     WHERE draft = '';
-  `);
+  `).run(options.followUpSignature);
   db.exec(`
     INSERT INTO activity (entity_type,entity_id,action,source,details)
       SELECT 'follow_up', follow_ups.id, 'auto_dismissed_terminal_status', 'migration',

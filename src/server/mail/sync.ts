@@ -53,7 +53,7 @@ export function syncMailMessages(repo: JobRepository, messages: MailMessage[]) {
       });
       jobId = job.id;
       const applicationId = repo.upsertApplication(jobId, classification.stage, message.receivedAt);
-      const resumeFilename = message.attachmentNames?.split(/,\s*/).find((name) => /(?:resume|cv|lebenslauf|morgan).+\.(?:pdf|docx?)$/i.test(name));
+      const resumeFilename = message.attachmentNames?.split(/,\s*/).find((name) => /(?:resume|cv|lebenslauf).*\.(?:pdf|docx?)$/i.test(name));
       if (resumeFilename) repo.setApplicationResumeVersion(applicationId, resumeFilename);
       const evidenceId = repo.recordEmailEvidence(jobId, {
         messageId: message.messageId,

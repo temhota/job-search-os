@@ -1,3 +1,4 @@
+import { migrationOptions, repositoryOptions } from "./config-fixture.js";
 // Break caught: incremental Apple Mail sync duplicates evidence or overwrites a later stage with an earlier acknowledgement.
 import { afterEach, describe, expect, test } from "vitest";
 import { createDatabase, migrate } from "../src/server/db/database.js";
@@ -11,8 +12,8 @@ afterEach(() => openDatabases.splice(0).forEach((db) => db.close()));
 function setup() {
   const db = createDatabase(":memory:");
   openDatabases.push(db);
-  migrate(db);
-  return new JobRepository(db);
+  migrate(db, migrationOptions);
+  return new JobRepository(db, repositoryOptions);
 }
 
 const base = {
@@ -23,11 +24,20 @@ const base = {
 };
 
 describe("syncMailMessages", () => {
+  test("does not classify an attachment as a resume from a candidate surname alone", () => {
+    const repo = setup();
+    syncMailMessages(repo, [{
+      ...base, messageId: "attachment@acme.example.com", receivedAt: "2026-08-01T09:00:00.000Z",
+      subject: "Thank you for your application - React Engineer",
+      content: "We received your application for React Engineer at Acme.", attachmentNames: "Morgan_Photo.pdf"
+    }]);
+    expect(repo.listApplications()[0].resume_version).toBeNull();
+  });
   test("preserves registered discovery provenance when matching mail arrives", () => {
     const db = createDatabase(":memory:");
     openDatabases.push(db);
-    migrate(db);
-    const repo = new JobRepository(db);
+    migrate(db, migrationOptions);
+    const repo = new JobRepository(db, repositoryOptions);
     const source = new SearchSourceRepository(db).create({ name: "Registered feed", searchUrl: "https://registered.example/jobs", category: "both" });
     const job = repo.upsertJob({ company: "Acme", title: "Senior React Native Engineer", employmentType: "permanent", source: "Import", searchSourceId: source.id });
 
@@ -48,8 +58,8 @@ describe("syncMailMessages", () => {
   test("creates one application timeline from acknowledgement and rejection", () => {
     const db = createDatabase(":memory:");
     openDatabases.push(db);
-    migrate(db);
-    const repo = new JobRepository(db);
+    migrate(db, migrationOptions);
+    const repo = new JobRepository(db, repositoryOptions);
     const result = syncMailMessages(repo, [
       {
         ...base,

@@ -9,6 +9,7 @@ import { defaultApi } from "../src/client/api.js";
 import { ReviewPage } from "../src/client/pages/ReviewPage.js";
 
 const dashboard = {
+  searchSelection: { permanent: 2, freelance: 3, total: 6 },
   summary: { jobs: 6, applications: 3, interviews: 2, responses: 2, offers: 0, review: 1 },
   jobs: [
     { id: 1, company: "Northstar Health", title: "Senior React Native Engineer", url: "https://jobs.example.com/northstar-mobile", score: 94, location: "Germany Remote", employment_type: "permanent", duplicate_blocked: 0 },
@@ -59,10 +60,14 @@ describe("App", () => {
     expect(container.querySelector(".brand")).toHaveTextContent(/^JSJob SearchOperating system$/);
   });
 
-  test("describes the local search without a preset personal deadline or employment mix", async () => {
-    render(<App api={{ load: vi.fn().mockResolvedValue(dashboard), updateApplication: vi.fn() }} />);
+  test.each([
+    [{ permanent: 2, freelance: 3, total: 6 }, "6 daily applications", "2 permanent · 3 freelance"],
+    [{ permanent: 0, freelance: 2, total: 2 }, "2 daily applications", "0 permanent · 2 freelance"]
+  ])("displays configured daily search information %#", async (searchSelection, target, mix) => {
+    render(<App api={{ load: vi.fn().mockResolvedValue({ ...dashboard, searchSelection }), updateApplication: vi.fn() }} />);
     await screen.findByRole("heading", { name: "Today" });
-    expect(screen.getByLabelText("Search overview")).toHaveTextContent("Local job search");
+    expect(screen.getByLabelText("Search overview")).toHaveTextContent(target);
+    expect(screen.getByLabelText("Search overview")).toHaveTextContent(mix);
   });
 
   test("shows source status in a collapsed Jobs disclosure and keeps disabled rows visible", async () => {

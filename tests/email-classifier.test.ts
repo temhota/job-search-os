@@ -1,8 +1,11 @@
 // Break caught: generic rejection language is turned into invented interview feedback.
 import { describe, expect, test } from "vitest";
-import { classifyEmail, isPlausibleRole } from "../src/server/mail/classifier.js";
+import { classifyEmail, isPlausibleCompany, isPlausibleRole } from "../src/server/mail/classifier.js";
 
 describe("classifyEmail", () => {
+  test("does not reserve the example profile name as an invalid company", () => {
+    expect(isPlausibleCompany("Example-Candidate Studio")).toBe(true);
+  });
   test("recognizes an application acknowledgement", () => {
     const result = classifyEmail({
       subject: "Thank you for your application - Senior React Native Engineer",
