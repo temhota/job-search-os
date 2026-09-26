@@ -23,4 +23,9 @@ describe("repository formatting", () => {
     const workflow = readFileSync(join(root, ".github", "workflows", "ci.yml"), "utf8");
     expect(workflow).toContain("- run: npm run format:check");
   });
+
+  test("audits the published PR head instead of GitHub's temporary merge commit", () => {
+    const workflow = readFileSync(join(root, ".github", "workflows", "ci.yml"), "utf8");
+    expect(workflow).toContain("ref: ${{ github.event.pull_request.head.sha || github.sha }}");
+  });
 });
