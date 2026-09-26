@@ -2,6 +2,16 @@
 
 A local job-search dashboard for reviewing leads, tracking applications, preparing resumes, and opening follow-up drafts. It stores application records and imported email evidence in local SQLite storage. You review documents and send messages yourself.
 
+## Demo
+
+Every company, vacancy, contact, and application shown below is fictitious.
+
+| Prioritize today's work                                                                        | Review and triage jobs                                                                |
+| ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| ![Today shortlist with ranked vacancies and application actions](docs/media/today.png)         | ![Job inbox with source, role, work-mode, and score filters](docs/media/jobs.png)     |
+| **Track the active pipeline**                                                                  | **Resolve uncertain email evidence**                                                  |
+| ![Application pipeline with stage controls and a scheduled follow-up](docs/media/pipeline.png) | ![Manual review queue containing two fictitious email records](docs/media/review.png) |
+
 ## Privacy and prerequisites
 
 The included candidate Alex Morgan, vacancies, and contacts are fictitious. Use fictitious data only in screenshots, demos, fixtures, and public discussions. Mail imports, personal configuration, databases, backups, and generated documents belong to the person running the app and must stay outside Git.
@@ -24,12 +34,12 @@ Vite prints the development URL. The API binds to loopback; the production app d
 
 Copy the complete structure from `config/example.json`. Configuration is validated on startup; missing or invalid configuration stops the app. There is no fallback to a personal profile.
 
-| Section | Fields and purpose |
-| --- | --- |
-| `candidate` | `filenameStem` names generated files using letters, digits, underscores, or hyphens; `signature` supplies follow-up text. `resumes.English` and `resumes.German` supply `name`, `contactLine`, mobile/web headlines, summaries and skills, `careerNote`, experience (`role`, `company`, `dates`, `bullets`), education, and languages. |
-| `mail` | `accounts` lists approved Apple Mail account names or addresses; `senderAddresses` lists your allowed sender identities; `initialSyncDate` is the initial import start date in YYYY-MM-DD form. Later imports use the saved cursor unless a date is supplied. |
-| `search` | `preferredKeywordGroups` defines labels, required `allOf` terms, optional `anyOf` alternatives and scores. `locations`, `seniorityKeywords`, and `acceptedLanguages` guide filtering. `excludeSponsorshipRequired`, `permanentMinSalary`, and `freelanceMinDayRate` express your policy. `dailySelection` reserves permanent/freelance slots within `total`. `sources` defines unique `seedKey`, display `name`, HTTP(S) `searchUrl` without credentials, and `category` (`permanent`, `freelance`, or `both`). |
-| `storage` | `dataDir` owns the SQLite database and local state; `outputDir` owns generated resumes. Relative directories resolve from the current working directory. Default `data/` and `output/` directories are ignored. If you choose other locations, keep them outside Git. |
+| Section     | Fields and purpose                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `candidate` | `filenameStem` names generated files using letters, digits, underscores, or hyphens; `signature` supplies follow-up text. `resumes.English` and `resumes.German` supply `name`, `contactLine`, mobile/web headlines, summaries and skills, `careerNote`, experience (`role`, `company`, `dates`, `bullets`), education, and languages.                                                                                                                                                                          |
+| `mail`      | `accounts` lists approved Apple Mail account names or addresses; `senderAddresses` lists your allowed sender identities; `initialSyncDate` is the initial import start date in YYYY-MM-DD form. Later imports use the saved cursor unless a date is supplied.                                                                                                                                                                                                                                                   |
+| `search`    | `preferredKeywordGroups` defines labels, required `allOf` terms, optional `anyOf` alternatives and scores. `locations`, `seniorityKeywords`, and `acceptedLanguages` guide filtering. `excludeSponsorshipRequired`, `permanentMinSalary`, and `freelanceMinDayRate` express your policy. `dailySelection` reserves permanent/freelance slots within `total`. `sources` defines unique `seedKey`, display `name`, HTTP(S) `searchUrl` without credentials, and `category` (`permanent`, `freelance`, or `both`). |
+| `storage`   | `dataDir` owns the SQLite database and local state; `outputDir` owns generated resumes. Relative directories resolve from the current working directory. Default `data/` and `output/` directories are ignored. If you choose other locations, keep them outside Git.                                                                                                                                                                                                                                           |
 
 ## Commands
 

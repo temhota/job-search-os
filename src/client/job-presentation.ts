@@ -1,6 +1,8 @@
 import type { Row } from "./types.js";
 
-function value(job: Row, key: string) { return String(job[key] ?? "").trim(); }
+function value(job: Row, key: string) {
+  return String(job[key] ?? "").trim();
+}
 
 export function normalizedWorkMode(job: Row): "remote" | "hybrid" | "onsite" | null {
   const explicit = value(job, "work_mode").toLowerCase();
@@ -21,7 +23,9 @@ export function normalizedWorkMode(job: Row): "remote" | "hybrid" | "onsite" | n
 export function jobLocationLabel(job: Row) {
   const mode = normalizedWorkMode(job);
   const location = value(job, "location");
-  const modeLabel = mode ? { remote: "Remote", hybrid: "Hybrid", onsite: "Onsite" }[mode] : "Work mode unknown";
+  const modeLabel = mode
+    ? { remote: "Remote", hybrid: "Hybrid", onsite: "Onsite" }[mode]
+    : "Work mode unknown";
   return [modeLabel, location].filter(Boolean).join(" · ");
 }
 
@@ -39,6 +43,8 @@ function roleKeywords(text: string) {
 export function roleMatches(job: Row, role: "react_native" | "react" | "typescript_node" | "") {
   if (!role) return true;
   const title = roleKeywords(value(job, "title"));
-  const inferred = Object.values(title).some(Boolean) ? title : roleKeywords(`${value(job, "description")} ${value(job, "skills")}`);
+  const inferred = Object.values(title).some(Boolean)
+    ? title
+    : roleKeywords(`${value(job, "description")} ${value(job, "skills")}`);
   return inferred[role];
 }

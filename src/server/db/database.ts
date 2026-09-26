@@ -11,7 +11,10 @@ export function createDatabase(filename: string): SqliteDatabase {
   return db;
 }
 
-export function migrate(db: SqliteDatabase, options: { searchSources: AppConfig["search"]["sources"]; followUpSignature: string }) {
+export function migrate(
+  db: SqliteDatabase,
+  options: { searchSources: AppConfig["search"]["sources"]; followUpSignature: string }
+) {
   db.exec(`
     CREATE TABLE IF NOT EXISTS jobs (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -165,30 +168,54 @@ export function migrate(db: SqliteDatabase, options: { searchSources: AppConfig[
     CREATE UNIQUE INDEX IF NOT EXISTS idx_interview_source ON interview_events(source_evidence_id) WHERE source_evidence_id IS NOT NULL;
   `);
 
-  const jobColumns = new Set((db.prepare("PRAGMA table_info(jobs)").all() as Array<{ name: string }>).map((column) => column.name));
+  const jobColumns = new Set(
+    (db.prepare("PRAGMA table_info(jobs)").all() as Array<{ name: string }>).map(
+      (column) => column.name
+    )
+  );
   if (!jobColumns.has("requires_sponsorship")) {
-    db.exec("ALTER TABLE jobs ADD COLUMN requires_sponsorship INTEGER NOT NULL DEFAULT 0 CHECK(requires_sponsorship IN (0,1))");
+    db.exec(
+      "ALTER TABLE jobs ADD COLUMN requires_sponsorship INTEGER NOT NULL DEFAULT 0 CHECK(requires_sponsorship IN (0,1))"
+    );
   }
   if (!jobColumns.has("triage_status")) {
-    db.exec("ALTER TABLE jobs ADD COLUMN triage_status TEXT NOT NULL DEFAULT 'new' CHECK(triage_status IN ('new','shortlisted','skipped','expired'))");
+    db.exec(
+      "ALTER TABLE jobs ADD COLUMN triage_status TEXT NOT NULL DEFAULT 'new' CHECK(triage_status IN ('new','shortlisted','skipped','expired'))"
+    );
   }
   if (!jobColumns.has("search_source_id")) {
-    db.exec("ALTER TABLE jobs ADD COLUMN search_source_id INTEGER REFERENCES search_sources(id) ON DELETE SET NULL");
+    db.exec(
+      "ALTER TABLE jobs ADD COLUMN search_source_id INTEGER REFERENCES search_sources(id) ON DELETE SET NULL"
+    );
   }
   db.exec("CREATE INDEX IF NOT EXISTS idx_jobs_triage ON jobs(triage_status, score DESC)");
 
   const findSeed = db.prepare("SELECT id FROM search_sources WHERE seed_key = ?");
-  const insertSeed = db.prepare("INSERT INTO search_sources (seed_key,name,search_url,url_fingerprint,category) VALUES (?,?,?,?,?)");
+  const insertSeed = db.prepare(
+    "INSERT INTO search_sources (seed_key,name,search_url,url_fingerprint,category) VALUES (?,?,?,?,?)"
+  );
   for (const source of options.searchSources) {
     if (!findSeed.get(source.seedKey)) {
-      insertSeed.run(source.seedKey, source.name, source.searchUrl, normalizeSearchUrl(source.searchUrl), source.category);
+      insertSeed.run(
+        source.seedKey,
+        source.name,
+        source.searchUrl,
+        normalizeSearchUrl(source.searchUrl),
+        source.category
+      );
     }
   }
 
-  const columns = new Set((db.prepare("PRAGMA table_info(applications)").all() as Array<{ name: string }>).map((column) => column.name));
-  if (!columns.has("rejection_reason")) db.exec("ALTER TABLE applications ADD COLUMN rejection_reason TEXT");
+  const columns = new Set(
+    (db.prepare("PRAGMA table_info(applications)").all() as Array<{ name: string }>).map(
+      (column) => column.name
+    )
+  );
+  if (!columns.has("rejection_reason"))
+    db.exec("ALTER TABLE applications ADD COLUMN rejection_reason TEXT");
   if (!columns.has("decision")) db.exec("ALTER TABLE applications ADD COLUMN decision TEXT");
-  if (!columns.has("stage_entered_at")) db.exec("ALTER TABLE applications ADD COLUMN stage_entered_at TEXT");
+  if (!columns.has("stage_entered_at"))
+    db.exec("ALTER TABLE applications ADD COLUMN stage_entered_at TEXT");
   db.exec(`
     UPDATE applications SET stage_entered_at = COALESCE(
       (SELECT MAX(received_at) FROM email_evidence
@@ -202,7 +229,8 @@ export function migrate(db: SqliteDatabase, options: { searchSources: AppConfig[
     INSERT OR IGNORE INTO application_status_events (application_id,status,occurred_at,source)
       SELECT id,status,stage_entered_at,'migration' FROM applications WHERE stage_entered_at IS NOT NULL;
   `);
-  db.prepare(`
+  db.prepare(
+    `
     UPDATE follow_ups SET draft =
       'Hello,' || char(10) || char(10) ||
       CASE WHEN sequence = 1 THEN 'I''m following up' ELSE 'I wanted to follow up once more' END ||
@@ -213,7 +241,8 @@ export function migrate(db: SqliteDatabase, options: { searchSources: AppConfig[
       '. I remain very interested in the role and would be happy to provide any additional information.' || char(10) || char(10) ||
       'Best regards,' || char(10) || ?
     WHERE draft = '';
-  `).run(options.followUpSignature);
+  `
+  ).run(options.followUpSignature);
   db.exec(`
     INSERT INTO activity (entity_type,entity_id,action,source,details)
       SELECT 'follow_up', follow_ups.id, 'auto_dismissed_terminal_status', 'migration',

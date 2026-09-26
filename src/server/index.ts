@@ -17,36 +17,53 @@ export interface StartupDependencies {
 }
 
 const defaultDependencies: StartupDependencies = {
-  mkdir: (path) => { mkdirSync(path, { recursive: true }); },
+  mkdir: (path) => {
+    mkdirSync(path, { recursive: true });
+  },
   openDatabase: createDatabase,
-  listen: (app, port) => new Promise((resolveListen, reject) => {
-    const server = app.listen(port, "127.0.0.1", () => {
-      console.log(`Job Search OS running at http://127.0.0.1:${port}`);
-      resolveListen();
-    });
-    server.once("error", reject);
-  })
+  listen: (app, port) =>
+    new Promise((resolveListen, reject) => {
+      const server = app.listen(port, "127.0.0.1", () => {
+        console.log(`Job Search OS running at http://127.0.0.1:${port}`);
+        resolveListen();
+      });
+      server.once("error", reject);
+    })
 };
 
-export async function startServer(input: { configPath?: string; dependencies?: StartupDependencies }): Promise<void> {
+export async function startServer(input: {
+  configPath?: string;
+  dependencies?: StartupDependencies;
+}): Promise<void> {
   const runtime = toRuntimeDependencies(loadAppConfig(input.configPath));
   const dependencies = input.dependencies ?? defaultDependencies;
   dependencies.mkdir(runtime.dataDir);
   dependencies.mkdir(runtime.outputDir);
   const db = dependencies.openDatabase(resolve(runtime.dataDir, "jobs.db"));
   try {
-    migrate(db, { searchSources: runtime.config.search.sources, followUpSignature: runtime.config.candidate.signature });
+    migrate(db, {
+      searchSources: runtime.config.search.sources,
+      followUpSignature: runtime.config.candidate.signature
+    });
     const repo = new JobRepository(db, runtime.repositoryOptions);
     const app = createApp(db, {
       repositoryOptions: runtime.repositoryOptions,
-      documentGenerator: createDocumentGenerator(repo, runtime.outputDir, runDocumentProcess, runtime.config.candidate),
+      documentGenerator: createDocumentGenerator(
+        repo,
+        runtime.outputDir,
+        runDocumentProcess,
+        runtime.config.candidate
+      ),
       emailDraftOpener: (target) => openAppleMailReplyDraft(target, runtime.mailPolicy)
     });
     const dist = resolve("dist");
     app.use(express.static(dist));
     app.get("/{*path}", (_request, response) => response.sendFile(resolve(dist, "index.html")));
     await dependencies.listen(app, Number(process.env.PORT ?? 4174));
-  } catch (error) { db.close(); throw error; }
+  } catch (error) {
+    db.close();
+    throw error;
+  }
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

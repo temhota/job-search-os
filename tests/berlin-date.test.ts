@@ -1,5 +1,9 @@
 import { describe, expect, test } from "vitest";
-import { berlinCalendarDay, nextBerlinCalendarDay, snoozeDueAt } from "../src/shared/berlin-date.js";
+import {
+  berlinCalendarDay,
+  nextBerlinCalendarDay,
+  snoozeDueAt
+} from "../src/shared/berlin-date.js";
 
 describe("Berlin snooze dates", () => {
   test("crosses the local date before UTC and preserves tomorrow across DST", () => {

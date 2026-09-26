@@ -105,7 +105,11 @@ export interface TodayView {
   followUpToday: Record<string, unknown>[];
   followUpRemainingCount: number;
   needsAttention: TodayAttentionItem[];
-  weeklyProgress: { last7Days: WeeklyProgressPeriod; last30Days: WeeklyProgressPeriod; allTime: WeeklyProgressPeriod };
+  weeklyProgress: {
+    last7Days: WeeklyProgressPeriod;
+    last30Days: WeeklyProgressPeriod;
+    allTime: WeeklyProgressPeriod;
+  };
 }
 
 export interface ReviewAttentionEvidence {
@@ -129,9 +133,7 @@ export interface PipelineView {
 }
 
 export type FollowUpAction =
-  | { action: "done" }
-  | { action: "dismiss" }
-  | { action: "snooze"; dueAt: ISODateString };
+  { action: "done" } | { action: "dismiss" } | { action: "snooze"; dueAt: ISODateString };
 
 export type EvidenceReviewAction =
   | { action: "ignore" }

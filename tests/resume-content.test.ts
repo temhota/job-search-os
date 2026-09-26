@@ -7,7 +7,10 @@ import { afterEach, describe, expect, test } from "vitest";
 import { resumeContentForJob } from "../src/server/documents/content.js";
 import { createDatabase, migrate } from "../src/server/db/database.js";
 import { JobRepository } from "../src/server/db/repository.js";
-import { createDocumentGenerator, resolveDocumentCommands } from "../src/server/documents/generator.js";
+import {
+  createDocumentGenerator,
+  resolveDocumentCommands
+} from "../src/server/documents/generator.js";
 
 const roots: string[] = [];
 afterEach(() => roots.splice(0).forEach((root) => rmSync(root, { recursive: true, force: true })));
@@ -18,28 +21,58 @@ function fixture(company = "Northstar Health") {
   const db = createDatabase(":memory:");
   migrate(db, migrationOptions);
   const repo = new JobRepository(db, repositoryOptions);
-  const job = repo.upsertJob({ company, title: "Senior React Native Engineer", description: "React Native Expo", employmentType: "permanent", source: "web" });
+  const job = repo.upsertJob({
+    company,
+    title: "Senior React Native Engineer",
+    description: "React Native Expo",
+    employmentType: "permanent",
+    source: "web"
+  });
   return { root, db, repo, job };
 }
 
 describe("resumeContentForJob", () => {
   test("preserves an empty optional career note in both languages", () => {
-    expect(resumeContentForJob({ company: "Example_Labs", title: "React Native Engineer" }, "English", testConfig.candidate.resumes).careerNote)
-      .toBe("");
-    expect(resumeContentForJob({ company: "Example_Labs", title: "React Native Engineer" }, "German", testConfig.candidate.resumes).careerNote)
-      .toBe("");
+    expect(
+      resumeContentForJob(
+        { company: "Example_Labs", title: "React Native Engineer" },
+        "English",
+        testConfig.candidate.resumes
+      ).careerNote
+    ).toBe("");
+    expect(
+      resumeContentForJob(
+        { company: "Example_Labs", title: "React Native Engineer" },
+        "German",
+        testConfig.candidate.resumes
+      ).careerNote
+    ).toBe("");
   });
 
   test("uses confirmed React Native evidence for Northstar Health without unverified claims", () => {
-    const content = resumeContentForJob({ company: "Northstar Health", title: "Senior Software Engineer (Mobile / React Native)", description: "React Native Expo EAS TypeScript" }, "English", testConfig.candidate.resumes);
+    const content = resumeContentForJob(
+      {
+        company: "Northstar Health",
+        title: "Senior Software Engineer (Mobile / React Native)",
+        description: "React Native Expo EAS TypeScript"
+      },
+      "English",
+      testConfig.candidate.resumes
+    );
     expect(content.headline).toBe("SOFTWARE ENGINEER - MOBILE");
     expect(content.summary).toContain("accessible mobile");
     expect(content.skills[0]).toContain("React Native");
     expect(content.contactLine).not.toContain("GitHub");
-    expect(JSON.stringify(content)).not.toMatch(/independently published|App Store ownership|Google Play ownership/i);
+    expect(JSON.stringify(content)).not.toMatch(
+      /independently published|App Store ownership|Google Play ownership/i
+    );
   });
   test("German package translates labels and factual experience without adding claims", () => {
-    const content = resumeContentForJob({ company: "Northstar Health", title: "Senior React Native Engineer" }, "German", testConfig.candidate.resumes);
+    const content = resumeContentForJob(
+      { company: "Northstar Health", title: "Senior React Native Engineer" },
+      "German",
+      testConfig.candidate.resumes
+    );
     expect(content.language).toBe("German");
     expect(content.summary).toContain("zugängliche mobile");
     expect(content.experience[0].bullets[0]).toContain("Beispielanwendungen");
@@ -50,18 +83,31 @@ describe("resumeContentForJob", () => {
 describe("document generator", () => {
   test("keeps distinct jobs at the same company in separate storage while preserving download filenames", async () => {
     const { root, db, repo, job } = fixture("Example Labs");
-    const other = repo.upsertJob({ company: "Example Labs", title: "Web Platform Developer", employmentType: "permanent", source: "web" });
+    const other = repo.upsertJob({
+      company: "Example Labs",
+      title: "Web Platform Developer",
+      employmentType: "permanent",
+      source: "web"
+    });
     expect(other.id).not.toBe(job.id);
     let generation = 0;
-    const generator = createDocumentGenerator(repo, root, async (_command, args) => {
-      if (args.some((arg) => arg.endsWith("generate-resume.py"))) {
-        generation += 1;
-        writeFileSync(args[2], `docx-${generation}`);
-      } else {
-        const outDir = args[args.indexOf("--outdir") + 1];
-        writeFileSync(join(outDir, basename(args.at(-1)!).replace(/\.docx$/, ".pdf")), `pdf-${generation}`);
-      }
-    }, testConfig.candidate);
+    const generator = createDocumentGenerator(
+      repo,
+      root,
+      async (_command, args) => {
+        if (args.some((arg) => arg.endsWith("generate-resume.py"))) {
+          generation += 1;
+          writeFileSync(args[2], `docx-${generation}`);
+        } else {
+          const outDir = args[args.indexOf("--outdir") + 1];
+          writeFileSync(
+            join(outDir, basename(args.at(-1)!).replace(/\.docx$/, ".pdf")),
+            `pdf-${generation}`
+          );
+        }
+      },
+      testConfig.candidate
+    );
     const first = await generator.generate(job.id, "English");
     const second = await generator.generate(other.id, "German");
     expect(first.docx.file_path).not.toBe(second.docx.file_path);
@@ -81,16 +127,24 @@ describe("document generator", () => {
   test("replaces generated files and records under one readable company filename", async () => {
     const { root, db, repo, job } = fixture("Example Labs");
     let generation = 0;
-    const generator = createDocumentGenerator(repo, root, async (_command, args) => {
-      if (args.some((arg) => arg.endsWith("generate-resume.py"))) {
-        generation += 1;
-        writeFileSync(args[2], `docx-${generation}`);
-      } else {
-        const outDir = args[args.indexOf("--outdir") + 1];
-        const input = args.at(-1)!;
-        writeFileSync(join(outDir, basename(input).replace(/\.docx$/, ".pdf")), `pdf-${generation}`);
-      }
-    }, testConfig.candidate);
+    const generator = createDocumentGenerator(
+      repo,
+      root,
+      async (_command, args) => {
+        if (args.some((arg) => arg.endsWith("generate-resume.py"))) {
+          generation += 1;
+          writeFileSync(args[2], `docx-${generation}`);
+        } else {
+          const outDir = args[args.indexOf("--outdir") + 1];
+          const input = args.at(-1)!;
+          writeFileSync(
+            join(outDir, basename(input).replace(/\.docx$/, ".pdf")),
+            `pdf-${generation}`
+          );
+        }
+      },
+      testConfig.candidate
+    );
 
     const first = await generator.generate(job.id, "English");
     const second = await generator.generate(job.id, "German");
@@ -123,51 +177,83 @@ describe("document generator", () => {
   });
 
   test("keeps explicit document runtime overrides ahead of bundled commands", () => {
-    expect(resolveDocumentCommands(
-      { DOCUMENT_PYTHON: "/custom/python", DOCUMENT_SOFFICE: "/custom/soffice" },
-      "/example-home",
-      () => true
-    )).toEqual({ python: "/custom/python", soffice: "/custom/soffice" });
+    expect(
+      resolveDocumentCommands(
+        { DOCUMENT_PYTHON: "/custom/python", DOCUMENT_SOFFICE: "/custom/soffice" },
+        "/example-home",
+        () => true
+      )
+    ).toEqual({ python: "/custom/python", soffice: "/custom/soffice" });
   });
 
   test("passes verified content to Python, converts locally, and registers one pair", async () => {
     const { root, db, repo, job } = fixture();
     const calls: Array<{ command: string; args: string[] }> = [];
-    const generator = createDocumentGenerator(repo, root, async (command, args) => {
-      calls.push({ command, args });
-      if (args.some((arg) => arg.endsWith("generate-resume.py"))) {
-        const payload = JSON.parse(readFileSync(args[1], "utf8"));
-        expect(payload.name).toBe("Alex Morgan");
-        expect(payload.contactLine).toBe("Europe | candidate@example.com");
-        expect(payload.experience.map((item: { company: string }) => item.company)).toEqual([
-          "Example Studio"
-        ]);
-        expect(payload.language).toBe("English");
-        expect(JSON.stringify(payload)).not.toMatch(/github\.com|independently published|app store ownership/i);
-        mkdirSync(join(root, "docx"), { recursive: true });
-        writeFileSync(args[2], "docx");
-      } else {
-        expect(args.slice(0, 4)).toEqual(["--headless", "--convert-to", "pdf", "--outdir"]);
-        const outDir = args[args.indexOf("--outdir") + 1];
-        writeFileSync(join(outDir, args.at(-1)!.split("/").at(-1)!.replace(/\.docx$/, ".pdf")), "pdf");
-      }
-    }, testConfig.candidate);
+    const generator = createDocumentGenerator(
+      repo,
+      root,
+      async (command, args) => {
+        calls.push({ command, args });
+        if (args.some((arg) => arg.endsWith("generate-resume.py"))) {
+          const payload = JSON.parse(readFileSync(args[1], "utf8"));
+          expect(payload.name).toBe("Alex Morgan");
+          expect(payload.contactLine).toBe("Europe | candidate@example.com");
+          expect(payload.experience.map((item: { company: string }) => item.company)).toEqual([
+            "Example Studio"
+          ]);
+          expect(payload.language).toBe("English");
+          expect(JSON.stringify(payload)).not.toMatch(
+            /github\.com|independently published|app store ownership/i
+          );
+          mkdirSync(join(root, "docx"), { recursive: true });
+          writeFileSync(args[2], "docx");
+        } else {
+          expect(args.slice(0, 4)).toEqual(["--headless", "--convert-to", "pdf", "--outdir"]);
+          const outDir = args[args.indexOf("--outdir") + 1];
+          writeFileSync(
+            join(
+              outDir,
+              args
+                .at(-1)!
+                .split("/")
+                .at(-1)!
+                .replace(/\.docx$/, ".pdf")
+            ),
+            "pdf"
+          );
+        }
+      },
+      testConfig.candidate
+    );
     const pair = await generator.generate(job.id, "English");
     expect(calls).toHaveLength(2);
     expect(pair.docx).toMatchObject({ job_id: job.id, format: "docx", language: "en" });
     expect(pair.pdf).toMatchObject({ job_id: job.id, format: "pdf", language: "en" });
-    expect(db.prepare("SELECT format FROM documents ORDER BY id").all()).toEqual([{ format: "docx" }, { format: "pdf" }]);
-    expect(db.prepare("SELECT action,source FROM activity WHERE entity_type='job' AND entity_id=? AND action='documents_generated'").all(job.id))
-      .toEqual([{ action: "documents_generated", source: "manual" }]);
+    expect(db.prepare("SELECT format FROM documents ORDER BY id").all()).toEqual([
+      { format: "docx" },
+      { format: "pdf" }
+    ]);
+    expect(
+      db
+        .prepare(
+          "SELECT action,source FROM activity WHERE entity_type='job' AND entity_id=? AND action='documents_generated'"
+        )
+        .all(job.id)
+    ).toEqual([{ action: "documents_generated", source: "manual" }]);
     expect(readdirSync(join(root, "tmp"))).toEqual([]);
     db.close();
   });
 
   test("does not register either document if PDF conversion produces no file", async () => {
     const { root, db, repo, job } = fixture();
-    const generator = createDocumentGenerator(repo, root, async (_command, args) => {
-      if (args.some((arg) => arg.endsWith("generate-resume.py"))) writeFileSync(args[2], "docx");
-    }, testConfig.candidate);
+    const generator = createDocumentGenerator(
+      repo,
+      root,
+      async (_command, args) => {
+        if (args.some((arg) => arg.endsWith("generate-resume.py"))) writeFileSync(args[2], "docx");
+      },
+      testConfig.candidate
+    );
     await expect(generator.generate(job.id, "German")).rejects.toThrow();
     expect(db.prepare("SELECT COUNT(*) AS count FROM documents").get()).toMatchObject({ count: 0 });
     expect(readdirSync(join(root, "tmp"))).toEqual([]);
@@ -177,7 +263,9 @@ describe("document generator", () => {
   test("does not register either document if Python produces no DOCX", async () => {
     const { root, db, repo, job } = fixture();
     const generator = createDocumentGenerator(repo, root, async () => {}, testConfig.candidate);
-    await expect(generator.generate(job.id, "English")).rejects.toThrow("DOCX generation produced no file");
+    await expect(generator.generate(job.id, "English")).rejects.toThrow(
+      "DOCX generation produced no file"
+    );
     expect(db.prepare("SELECT COUNT(*) AS count FROM documents").get()).toMatchObject({ count: 0 });
     expect(readdirSync(join(root, "tmp"))).toEqual([]);
     db.close();
@@ -186,33 +274,62 @@ describe("document generator", () => {
   test("removes a partially written payload when the filesystem write fails", async () => {
     const { root, db, repo, job } = fixture();
     let processes = 0;
-    const generator = createDocumentGenerator(repo, root, async () => { processes += 1; }, testConfig.candidate, (path, content) => {
-      writeFileSync(path, content.slice(0, 12));
-      throw new Error("disk full during payload write");
-    });
-    await expect(generator.generate(job.id, "English")).rejects.toThrow("disk full during payload write");
+    const generator = createDocumentGenerator(
+      repo,
+      root,
+      async () => {
+        processes += 1;
+      },
+      testConfig.candidate,
+      (path, content) => {
+        writeFileSync(path, content.slice(0, 12));
+        throw new Error("disk full during payload write");
+      }
+    );
+    await expect(generator.generate(job.id, "English")).rejects.toThrow(
+      "disk full during payload write"
+    );
     expect(processes).toBe(0);
     expect(readdirSync(join(root, "tmp"))).toEqual([]);
     expect(db.prepare("SELECT COUNT(*) AS count FROM documents").get()).toMatchObject({ count: 0 });
-    expect(db.prepare("SELECT COUNT(*) AS count FROM activity WHERE action='documents_generated'").get()).toMatchObject({ count: 0 });
+    expect(
+      db.prepare("SELECT COUNT(*) AS count FROM activity WHERE action='documents_generated'").get()
+    ).toMatchObject({ count: 0 });
     db.close();
   });
 
   test("passes translated verified German payload into the document process", async () => {
     const { root, db, repo, job } = fixture();
-    const generator = createDocumentGenerator(repo, root, async (_command, args) => {
-      if (args.some((arg) => arg.endsWith("generate-resume.py"))) {
-        const payload = JSON.parse(readFileSync(args[1], "utf8"));
-        expect(payload.language).toBe("German");
-        expect(payload.summary).toContain("zugängliche mobile");
-        expect(payload.experience[0].bullets[0]).toContain("Beispielanwendungen");
-        expect(JSON.stringify(payload)).not.toMatch(/github|app store|google play|OTA|team lead/i);
-        writeFileSync(args[2], "docx");
-      } else {
-        const outDir = args[args.indexOf("--outdir") + 1];
-        writeFileSync(join(outDir, args.at(-1)!.split("/").at(-1)!.replace(/\.docx$/, ".pdf")), "pdf");
-      }
-    }, testConfig.candidate);
+    const generator = createDocumentGenerator(
+      repo,
+      root,
+      async (_command, args) => {
+        if (args.some((arg) => arg.endsWith("generate-resume.py"))) {
+          const payload = JSON.parse(readFileSync(args[1], "utf8"));
+          expect(payload.language).toBe("German");
+          expect(payload.summary).toContain("zugängliche mobile");
+          expect(payload.experience[0].bullets[0]).toContain("Beispielanwendungen");
+          expect(JSON.stringify(payload)).not.toMatch(
+            /github|app store|google play|OTA|team lead/i
+          );
+          writeFileSync(args[2], "docx");
+        } else {
+          const outDir = args[args.indexOf("--outdir") + 1];
+          writeFileSync(
+            join(
+              outDir,
+              args
+                .at(-1)!
+                .split("/")
+                .at(-1)!
+                .replace(/\.docx$/, ".pdf")
+            ),
+            "pdf"
+          );
+        }
+      },
+      testConfig.candidate
+    );
     const pair = await generator.generate(job.id, "German");
     expect(pair.docx).toMatchObject({ language: "de" });
     expect(pair.pdf).toMatchObject({ language: "de" });

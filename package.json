@@ -16,6 +16,8 @@
     "sources:record": "tsx scripts/search-sources.ts record",
     "seed": "tsx scripts/seed.ts",
     "privacy:audit": "tsx scripts/privacy-audit.ts",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "eslint . --max-warnings=0"
@@ -43,6 +45,7 @@
     "eslint-plugin-react-hooks": "^5.2.0",
     "eslint-plugin-react-refresh": "^0.4.20",
     "jsdom": "^26.1.0",
+    "prettier": "^3.9.9",
     "supertest": "^7.1.4",
     "tsx": "^4.20.5",
     "typescript": "^5.9.2",

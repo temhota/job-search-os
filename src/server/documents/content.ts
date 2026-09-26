@@ -13,14 +13,23 @@ export interface ResumeContent {
   languages: string;
 }
 
-export function resumeContentForJob(job: { company: string; title: string; description?: string | null }, language: "English" | "German", templates: AppConfig["candidate"]["resumes"]): ResumeContent {
+export function resumeContentForJob(
+  job: { company: string; title: string; description?: string | null },
+  language: "English" | "German",
+  templates: AppConfig["candidate"]["resumes"]
+): ResumeContent {
   const mobile = /react native|mobile|expo/i.test(`${job.title} ${job.description ?? ""}`);
   const template = templates[language];
   return {
-    language, name: template.name, contactLine: template.contactLine,
+    language,
+    name: template.name,
+    contactLine: template.contactLine,
     headline: mobile ? template.mobileHeadline : template.webHeadline,
     summary: mobile ? template.mobileSummary : template.webSummary,
     skills: [...(mobile ? template.mobileSkills : template.webSkills)],
-    careerNote: template.careerNote, experience: structuredClone(template.experience), education: [...template.education], languages: template.languages
+    careerNote: template.careerNote,
+    experience: structuredClone(template.experience),
+    education: [...template.education],
+    languages: template.languages
   };
 }

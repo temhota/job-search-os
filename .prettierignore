@@ -1,0 +1,8 @@
+coverage/
+data/
+dist/
+dist-server/
+docs/media/
+node_modules/
+output/
+tmp/

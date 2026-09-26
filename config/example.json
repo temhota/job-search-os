@@ -10,28 +10,18 @@
         "webHeadline": "SOFTWARE ENGINEER - WEB",
         "mobileSummary": "Builds accessible mobile applications.",
         "webSummary": "Builds accessible web applications.",
-        "mobileSkills": [
-          "React Native",
-          "TypeScript"
-        ],
-        "webSkills": [
-          "React",
-          "TypeScript"
-        ],
+        "mobileSkills": ["React Native", "TypeScript"],
+        "webSkills": ["React", "TypeScript"],
         "careerNote": "",
         "experience": [
           {
             "role": "Software Engineer",
             "company": "Example Studio",
             "dates": "2020 - 2024",
-            "bullets": [
-              "Built example applications."
-            ]
+            "bullets": ["Built example applications."]
           }
         ],
-        "education": [
-          "Computing | Example Academy | 2016 - 2019"
-        ],
+        "education": ["Computing | Example Academy | 2016 - 2019"],
         "languages": "English | German"
       },
       "German": {
@@ -41,90 +31,51 @@
         "webHeadline": "SOFTWAREENTWICKLUNG - WEB",
         "mobileSummary": "Entwickelt zugängliche mobile Anwendungen.",
         "webSummary": "Entwickelt zugängliche Webanwendungen.",
-        "mobileSkills": [
-          "React Native",
-          "TypeScript"
-        ],
-        "webSkills": [
-          "React",
-          "TypeScript"
-        ],
+        "mobileSkills": ["React Native", "TypeScript"],
+        "webSkills": ["React", "TypeScript"],
         "careerNote": "",
         "experience": [
           {
             "role": "Softwareentwicklung",
             "company": "Example Studio",
             "dates": "2020 - 2024",
-            "bullets": [
-              "Entwicklung von Beispielanwendungen."
-            ]
+            "bullets": ["Entwicklung von Beispielanwendungen."]
           }
         ],
-        "education": [
-          "Informatik | Example Academy | 2016 - 2019"
-        ],
+        "education": ["Informatik | Example Academy | 2016 - 2019"],
         "languages": "Englisch | Deutsch"
       }
     }
   },
   "mail": {
-    "accounts": [
-      "candidate@example.com",
-      "Example Mail"
-    ],
-    "senderAddresses": [
-      "candidate@example.com"
-    ],
+    "accounts": ["candidate@example.com", "Example Mail"],
+    "senderAddresses": ["candidate@example.com"],
     "initialSyncDate": "2026-01-01"
   },
   "search": {
     "preferredKeywordGroups": [
       {
         "label": "Mobile TypeScript",
-        "allOf": [
-          "react native",
-          "typescript"
-        ],
+        "allOf": ["react native", "typescript"],
         "anyOf": [],
         "score": 35
       },
       {
         "label": "Web TypeScript",
-        "allOf": [
-          "react",
-          "typescript"
-        ],
+        "allOf": ["react", "typescript"],
         "anyOf": [],
         "score": 28
       },
       {
         "label": "Full stack",
-        "allOf": [
-          "typescript"
-        ],
-        "anyOf": [
-          "node",
-          "full-stack",
-          "full stack"
-        ],
+        "allOf": ["typescript"],
+        "anyOf": ["node", "full-stack", "full stack"],
         "score": 22
       }
     ],
-    "locations": [
-      "Europe",
-      "Remote"
-    ],
-    "seniorityKeywords": [
-      "senior",
-      "staff",
-      "lead"
-    ],
-    "acceptedLanguages": [
-      "English",
-      "German",
-      "Deutsch",
-      "Englisch"
-    ],
+    "locations": ["Europe", "Remote"],
+    "seniorityKeywords": ["senior", "staff", "lead"],
+    "acceptedLanguages": ["English", "German", "Deutsch", "Englisch"],
     "excludeSponsorshipRequired": true,
     "permanentMinSalary": 60000,
     "freelanceMinDayRate": 500,

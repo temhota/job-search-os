@@ -3,5 +3,7 @@ export function safeJobUrl(value: unknown) {
   try {
     const parsed = new URL(value);
     return ["http:", "https:"].includes(parsed.protocol) && parsed.hostname ? parsed.href : null;
-  } catch { return null; }
+  } catch {
+    return null;
+  }
 }

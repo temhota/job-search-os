@@ -45,7 +45,8 @@ export const uiText = {
       unknown: "Unknown"
     },
     chooseAnother: "Choose another application",
-    preserveStage: "If the email has no detected status, linking keeps the application's current stage unless you choose one.",
+    preserveStage:
+      "If the email has no detected status, linking keeps the application's current stage unless you choose one.",
     searchApplications: "Search applications",
     searchQueue: "Search review items",
     filterGroup: "Filter group",
@@ -120,7 +121,8 @@ export const uiText = {
     documents: "Documents",
     download: "Download",
     manualReview: "Needs manual review",
-    reviewExplanation: "These emails were not allowed to change the pipeline because the system could not confidently match them. Choose exactly what each email means.",
+    reviewExplanation:
+      "These emails were not allowed to change the pipeline because the system could not confidently match them. Choose exactly what each email means.",
     reviewReason: "Reason: low-confidence classification or no reliable application match.",
     reviewStatus: "Review status",
     existingApplication: "Existing application",
@@ -161,7 +163,8 @@ export const uiText = {
     generatingPackage: "Generating package…",
     materials: "Materials",
     materialsFor: "Materials for",
-    materialsDescription: "Create a local resume package for this job. This does not mark it as applied.",
+    materialsDescription:
+      "Create a local resume package for this job. This does not mark it as applied.",
     last7Days: "Last 7 days",
     last30Days: "Last 30 days",
     allTime: "All time",
